@@ -1,8 +1,7 @@
-feat: Phase 3 - Crops + Livestock management  
+feat: Phase 4 - Inventory + Procurement  
   
-- Migration 0003: seasons, crops, crop_varieties, crop_seasons, crop_activities, crop_inputs, harvests, livestock_species, livestock_groups, livestock_batches, livestock_events, livestock_health, livestock_feed, livestock_sales + RLS + audit triggers  
-- Validation schemas for all crop/livestock entities  
-- cropService: seasons, crop seasons, activities, inputs, harvests, crop/variety reference  
-- livestockService: groups, batches, events, health, feed, sales, financials (FCR, mortality rate)  
-- UI: /crops (list), /crops/plan (create crop season), /livestock (list), /livestock/new (create batch)  
+- Migration 0004: inventory_categories, inventory_items, inventory_locations, inventory_movements (append-only), inventory_balances, suppliers, purchase_requests, purchase_orders, goods_receipts, supplier_invoices + RLS + audit triggers  
+- Validation schemas for all inventory/procurement entities  
+- inventoryService: categories, items, locations, movements, balances, suppliers, purchase requests, purchase orders, goods receipts, supplier invoices  
+- UI: /inventory (list with low-stock alert, grouped by category), /inventory/new (create item)  
 - Typecheck + Webpack build pass  
