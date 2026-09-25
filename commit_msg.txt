@@ -1,0 +1,12 @@
+feat: HUNDREDFOLD shell + auth + farms + GPS boundary + map workspace  
+  
+- Plain Better Auth against neon_auth schema (email/password, email verification via nodemailer)  
+- RLS-aware db layer with withUser() transaction helper  
+- Organization onboarding (create_organization RPC + trial subscription)  
+- Farm creation with GPS boundary walk (phone GPS, accuracy checks, pause/resume/undo/restart)  
+- Farm list with mini-maps  
+- Desktop map workspace with layers panel + 2D/3D toggle  
+- Phase-gated catch-all for future modules  
+- HUNDREDFOLD brand: topbar, desktop sidebar, mobile bottom nav + Add quick-actions  
+- Tailwind v3 with emerald primary tokens  
+- Migrations 0001_foundation + 0002_reference_data applied to Neon production  
