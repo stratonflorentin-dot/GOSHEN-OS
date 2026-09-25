@@ -1,12 +1,8 @@
-feat: HUNDREDFOLD shell + auth + farms + GPS boundary + map workspace  
+feat: Phase 3 - Crops + Livestock management  
   
-- Plain Better Auth against neon_auth schema (email/password, email verification via nodemailer)  
-- RLS-aware db layer with withUser() transaction helper  
-- Organization onboarding (create_organization RPC + trial subscription)  
-- Farm creation with GPS boundary walk (phone GPS, accuracy checks, pause/resume/undo/restart)  
-- Farm list with mini-maps  
-- Desktop map workspace with layers panel + 2D/3D toggle  
-- Phase-gated catch-all for future modules  
-- HUNDREDFOLD brand: topbar, desktop sidebar, mobile bottom nav + Add quick-actions  
-- Tailwind v3 with emerald primary tokens  
-- Migrations 0001_foundation + 0002_reference_data applied to Neon production  
+- Migration 0003: seasons, crops, crop_varieties, crop_seasons, crop_activities, crop_inputs, harvests, livestock_species, livestock_groups, livestock_batches, livestock_events, livestock_health, livestock_feed, livestock_sales + RLS + audit triggers  
+- Validation schemas for all crop/livestock entities  
+- cropService: seasons, crop seasons, activities, inputs, harvests, crop/variety reference  
+- livestockService: groups, batches, events, health, feed, sales, financials (FCR, mortality rate)  
+- UI: /crops (list), /crops/plan (create crop season), /livestock (list), /livestock/new (create batch)  
+- Typecheck + Webpack build pass  
