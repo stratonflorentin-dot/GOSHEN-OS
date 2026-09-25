@@ -15,3 +15,12 @@ export function formatAreaTriple(m2: number | null | undefined, locale = "en"): 
   if (m2 == null) return "—";
   return `${formatHa(m2, locale)} / ${formatAcres(m2, locale)} / ${Math.round(m2).toLocaleString(locale)} m²`;
 }
+  
+export function formatCurrency(amount: number, currency = "TZS", locale = "en"): string {  
+  return new Intl.NumberFormat(locale, {  
+    style: "currency",  
+    currency,  
+    minimumFractionDigits: 0,  
+    maximumFractionDigits: 0,  
+  }).format(amount);  
+} 

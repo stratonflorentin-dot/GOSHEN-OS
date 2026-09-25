@@ -1,7 +1,7 @@
-feat: Phase 4 - Inventory + Procurement  
+feat: Phase 5 - Finance + Accounting  
   
-- Migration 0004: inventory_categories, inventory_items, inventory_locations, inventory_movements (append-only), inventory_balances, suppliers, purchase_requests, purchase_orders, goods_receipts, supplier_invoices + RLS + audit triggers  
-- Validation schemas for all inventory/procurement entities  
-- inventoryService: categories, items, locations, movements, balances, suppliers, purchase requests, purchase orders, goods receipts, supplier invoices  
-- UI: /inventory (list with low-stock alert, grouped by category), /inventory/new (create item)  
+- Migration 0005: accounts (chart of accounts), journal_entries, journal_lines (double-entry), payments, expenses, revenues, cost_allocations, cost_centers, assets, loans, loan_repayments, owner_equity + RLS + audit triggers  
+- Validation schemas for all finance/accounting entities  
+- financeService: accounts, journal entries (with balance validation), payments, expenses, revenues, cost allocations, cost centers, assets, loans, owner equity, financial summaries  
+- UI: /finance (dashboard with KPIs, quick actions, module navigation), /finance/journal/new (dynamic double-entry form with live debit/credit totals)  
 - Typecheck + Webpack build pass  
