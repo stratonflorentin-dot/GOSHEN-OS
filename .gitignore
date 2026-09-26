@@ -7,6 +7,7 @@ node_modules/
 .next/
 out/
 build/
+.turbo/
 
 # env — never commit secrets
 .env

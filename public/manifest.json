@@ -1,0 +1,49 @@
+{
+  "name": "GOSHEN OS - Agricultural Operating System",
+  "short_name": "GOSHEN OS",
+  "description": "Multi-tenant SaaS platform for managing agricultural businesses: GIS, crops, livestock, inventory, finance, accounting, weather, analytics, AI intelligence, and offline field operations.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f8f7",
+  "theme_color": "#14211a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["agriculture", "business", "productivity"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "View farm dashboard and overview",
+      "url": "/dashboard",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Map",
+      "short_name": "Map",
+      "description": "View farm map and plots",
+      "url": "/map",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Weather",
+      "short_name": "Weather",
+      "description": "View weather forecast and alerts",
+      "url": "/weather",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    }
+  ]
+}

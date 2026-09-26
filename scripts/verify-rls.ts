@@ -48,7 +48,7 @@ function check(label: string, ok: boolean, detail = "") {
 
 async function asUser<T>(userId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
   const out = await app.begin(async (tx) => {
-    await tx.unsafe(`select set_config('app.user_id', $1, true)`, [userId]);
+    await tx`select set_config('app.user_id', ${userId}, true)`;
     return fn(tx as Tx);
   });
   return out as T;

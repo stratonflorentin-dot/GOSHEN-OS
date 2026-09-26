@@ -1,12 +1,13 @@
 -- =====================================================================
 -- 0005_finance_accounting.sql — Phase 5 (docs/03-database-schema.md §7–8, §18–21)
 -- Neon / Lakebase Postgres edition.
+-- IDempotent version for safe re-execution
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
 -- Chart of Accounts
 -- ---------------------------------------------------------------------
-create table public.accounts (
+create table if not exists public.accounts (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   code text not null check (code ~ '^[0-9]{3,10}$'),
@@ -24,16 +25,18 @@ create table public.accounts (
   updated_at timestamptz not null default now(),
   unique (organization_id, code)
 );
+drop trigger if exists accounts_touch on public.accounts;
 create trigger accounts_touch before update on public.accounts
   for each row execute function public.touch_updated_at();
+drop trigger if exists accounts_created_by on public.accounts;
 create trigger accounts_created_by before insert on public.accounts
   for each row execute function public.set_created_by();
-create index accounts_org_idx on public.accounts (organization_id, account_type, code);
+create index if not exists accounts_org_idx on public.accounts (organization_id, account_type, code);
 
 -- ---------------------------------------------------------------------
 -- Journal Entries (double-entry bookkeeping)
 -- ---------------------------------------------------------------------
-create table public.journal_entries (
+create table if not exists public.journal_entries (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   entry_number text not null,
@@ -52,17 +55,19 @@ create table public.journal_entries (
   updated_at timestamptz not null default now(),
   unique (organization_id, entry_number)
 );
+drop trigger if exists journal_entries_touch on public.journal_entries;
 create trigger journal_entries_touch before update on public.journal_entries
   for each row execute function public.touch_updated_at();
+drop trigger if exists journal_entries_created_by on public.journal_entries;
 create trigger journal_entries_created_by before insert on public.journal_entries
   for each row execute function public.set_created_by();
-create index journal_entries_org_idx on public.journal_entries (organization_id, entry_date desc);
-create index journal_entries_ref_idx on public.journal_entries (reference_type, reference_id);
+create index if not exists journal_entries_org_idx on public.journal_entries (organization_id, entry_date desc);
+create index if not exists journal_entries_ref_idx on public.journal_entries (reference_type, reference_id);
 
 -- ---------------------------------------------------------------------
 -- Journal Lines (each line hits one account with debit or credit)
 -- ---------------------------------------------------------------------
-create table public.journal_lines (
+create table if not exists public.journal_lines (
   id uuid primary key default gen_random_uuid(),
   entry_id uuid not null references public.journal_entries(id) on delete cascade,
   account_id uuid not null references public.accounts(id) on delete restrict,
@@ -78,16 +83,16 @@ create table public.journal_lines (
   cost_center_id uuid, -- FK added after cost_centers
   created_at timestamptz not null default now()
 );
-create index journal_lines_entry_idx on public.journal_lines (entry_id);
-create index journal_lines_account_idx on public.journal_lines (account_id, entry_id);
-create index journal_lines_farm_idx on public.journal_lines (farm_id);
-create index journal_lines_crop_idx on public.journal_lines (crop_season_id);
-create index journal_lines_livestock_idx on public.journal_lines (livestock_batch_id);
+create index if not exists journal_lines_entry_idx on public.journal_lines (entry_id);
+create index if not exists journal_lines_account_idx on public.journal_lines (account_id, entry_id);
+create index if not exists journal_lines_farm_idx on public.journal_lines (farm_id);
+create index if not exists journal_lines_crop_idx on public.journal_lines (crop_season_id);
+create index if not exists journal_lines_livestock_idx on public.journal_lines (livestock_batch_id);
 
 -- ---------------------------------------------------------------------
 -- Payments (cash/bank/mobile money movements)
 -- ---------------------------------------------------------------------
-create table public.payments (
+create table if not exists public.payments (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   payment_number text not null,
@@ -111,17 +116,19 @@ create table public.payments (
   updated_at timestamptz not null default now(),
   unique (organization_id, payment_number)
 );
+drop trigger if exists payments_touch on public.payments;
 create trigger payments_touch before update on public.payments
   for each row execute function public.touch_updated_at();
+drop trigger if exists payments_created_by on public.payments;
 create trigger payments_created_by before insert on public.payments
   for each row execute function public.set_created_by();
-create index payments_org_idx on public.payments (organization_id, payment_date desc);
-create index payments_ref_idx on public.payments (reference_type, reference_id);
+create index if not exists payments_org_idx on public.payments (organization_id, payment_date desc);
+create index if not exists payments_ref_idx on public.payments (reference_type, reference_id);
 
 -- ---------------------------------------------------------------------
 -- Expenses (operational expenses linked to activities)
 -- ---------------------------------------------------------------------
-create table public.expenses (
+create table if not exists public.expenses (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   expense_number text not null,
@@ -147,19 +154,21 @@ create table public.expenses (
   updated_at timestamptz not null default now(),
   unique (organization_id, expense_number)
 );
+drop trigger if exists expenses_touch on public.expenses;
 create trigger expenses_touch before update on public.expenses
   for each row execute function public.touch_updated_at();
+drop trigger if exists expenses_created_by on public.expenses;
 create trigger expenses_created_by before insert on public.expenses
   for each row execute function public.set_created_by();
-create index expenses_org_idx on public.expenses (organization_id, expense_date desc);
-create index expenses_farm_idx on public.expenses (farm_id);
-create index expenses_crop_idx on public.expenses (crop_season_id);
-create index expenses_livestock_idx on public.expenses (livestock_batch_id);
+create index if not exists expenses_org_idx on public.expenses (organization_id, expense_date desc);
+create index if not exists expenses_farm_idx on public.expenses (farm_id);
+create index if not exists expenses_crop_idx on public.expenses (crop_season_id);
+create index if not exists expenses_livestock_idx on public.expenses (livestock_batch_id);
 
 -- ---------------------------------------------------------------------
 -- Revenues (sales revenue recognition)
 -- ---------------------------------------------------------------------
-create table public.revenues (
+create table if not exists public.revenues (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   revenue_number text not null,
@@ -184,19 +193,21 @@ create table public.revenues (
   updated_at timestamptz not null default now(),
   unique (organization_id, revenue_number)
 );
+drop trigger if exists revenues_touch on public.revenues;
 create trigger revenues_touch before update on public.revenues
   for each row execute function public.touch_updated_at();
+drop trigger if exists revenues_created_by on public.revenues;
 create trigger revenues_created_by before insert on public.revenues
   for each row execute function public.set_created_by();
-create index revenues_org_idx on public.revenues (organization_id, revenue_date desc);
-create index revenues_farm_idx on public.revenues (farm_id);
-create index revenues_crop_idx on public.revenues (crop_season_id);
-create index revenues_livestock_idx on public.revenues (livestock_batch_id);
+create index if not exists revenues_org_idx on public.revenues (organization_id, revenue_date desc);
+create index if not exists revenues_farm_idx on public.revenues (farm_id);
+create index if not exists revenues_crop_idx on public.revenues (crop_season_id);
+create index if not exists revenues_livestock_idx on public.revenues (livestock_batch_id);
 
 -- ---------------------------------------------------------------------
 -- Cost Allocations (distribute costs to farms/plots/crops/livestock)
 -- ---------------------------------------------------------------------
-create table public.cost_allocations (
+create table if not exists public.cost_allocations (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   source_type text not null check (source_type in (
@@ -218,18 +229,19 @@ create table public.cost_allocations (
   created_by uuid references public.profiles(id),
   created_at timestamptz not null default now()
 );
+drop trigger if exists cost_allocations_created_by on public.cost_allocations;
 create trigger cost_allocations_created_by before insert on public.cost_allocations
   for each row execute function public.set_created_by();
-create index cost_allocations_org_idx on public.cost_allocations (organization_id, allocation_date desc);
-create index cost_allocations_source_idx on public.cost_allocations (source_type, source_id);
-create index cost_allocations_farm_idx on public.cost_allocations (farm_id);
-create index cost_allocations_crop_idx on public.cost_allocations (crop_season_id);
-create index cost_allocations_livestock_idx on public.cost_allocations (livestock_batch_id);
+create index if not exists cost_allocations_org_idx on public.cost_allocations (organization_id, allocation_date desc);
+create index if not exists cost_allocations_source_idx on public.cost_allocations (source_type, source_id);
+create index if not exists cost_allocations_farm_idx on public.cost_allocations (farm_id);
+create index if not exists cost_allocations_crop_idx on public.cost_allocations (crop_season_id);
+create index if not exists cost_allocations_livestock_idx on public.cost_allocations (livestock_batch_id);
 
 -- ---------------------------------------------------------------------
 -- Cost Centers (departments, enterprises)
 -- ---------------------------------------------------------------------
-create table public.cost_centers (
+create table if not exists public.cost_centers (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   code text not null check (code ~ '^[A-Z0-9_-]{2,40}$'),
@@ -243,15 +255,17 @@ create table public.cost_centers (
   updated_at timestamptz not null default now(),
   unique (organization_id, code)
 );
+drop trigger if exists cost_centers_touch on public.cost_centers;
 create trigger cost_centers_touch before update on public.cost_centers
   for each row execute function public.touch_updated_at();
+drop trigger if exists cost_centers_created_by on public.cost_centers;
 create trigger cost_centers_created_by before insert on public.cost_centers
   for each row execute function public.set_created_by();
 
 -- ---------------------------------------------------------------------
 -- Assets (fixed assets register)
 -- ---------------------------------------------------------------------
-create table public.assets (
+create table if not exists public.assets (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   asset_number text not null,
@@ -280,17 +294,19 @@ create table public.assets (
   updated_at timestamptz not null default now(),
   unique (organization_id, asset_number)
 );
+drop trigger if exists assets_touch on public.assets;
 create trigger assets_touch before update on public.assets
   for each row execute function public.touch_updated_at();
+drop trigger if exists assets_created_by on public.assets;
 create trigger assets_created_by before insert on public.assets
   for each row execute function public.set_created_by();
-create index assets_org_idx on public.assets (organization_id, asset_type);
-create index assets_farm_idx on public.assets (farm_id);
+create index if not exists assets_org_idx on public.assets (organization_id, asset_type);
+create index if not exists assets_farm_idx on public.assets (farm_id);
 
 -- ---------------------------------------------------------------------
 -- Loans
 -- ---------------------------------------------------------------------
-create table public.loans (
+create table if not exists public.loans (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   loan_number text not null,
@@ -316,16 +332,18 @@ create table public.loans (
   updated_at timestamptz not null default now(),
   unique (organization_id, loan_number)
 );
+drop trigger if exists loans_touch on public.loans;
 create trigger loans_touch before update on public.loans
   for each row execute function public.touch_updated_at();
+drop trigger if exists loans_created_by on public.loans;
 create trigger loans_created_by before insert on public.loans
   for each row execute function public.set_created_by();
-create index loans_org_idx on public.loans (organization_id, status);
+create index if not exists loans_org_idx on public.loans (organization_id, status);
 
 -- ---------------------------------------------------------------------
 -- Loan Repayments
 -- ---------------------------------------------------------------------
-create table public.loan_repayments (
+create table if not exists public.loan_repayments (
   id uuid primary key default gen_random_uuid(),
   loan_id uuid not null references public.loans(id) on delete cascade,
   organization_id uuid not null references public.organizations(id) on delete cascade,
@@ -339,14 +357,15 @@ create table public.loan_repayments (
   created_by uuid references public.profiles(id),
   created_at timestamptz not null default now()
 );
+drop trigger if exists loan_repayments_created_by on public.loan_repayments;
 create trigger loan_repayments_created_by before insert on public.loan_repayments
   for each row execute function public.set_created_by();
-create index loan_repayments_loan_idx on public.loan_repayments (loan_id, repayment_date);
+create index if not exists loan_repayments_loan_idx on public.loan_repayments (loan_id, repayment_date);
 
 -- ---------------------------------------------------------------------
 -- Owner Equity (contributions and withdrawals)
 -- ---------------------------------------------------------------------
-create table public.owner_equity (
+create table if not exists public.owner_equity (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   transaction_number text not null,
@@ -361,142 +380,191 @@ create table public.owner_equity (
   created_at timestamptz not null default now(),
   unique (organization_id, transaction_number)
 );
+drop trigger if exists owner_equity_created_by on public.owner_equity;
 create trigger owner_equity_created_by before insert on public.owner_equity
   for each row execute function public.set_created_by();
-create index owner_equity_org_idx on public.owner_equity (organization_id, transaction_date desc);
+create index if not exists owner_equity_org_idx on public.owner_equity (organization_id, transaction_date desc);
 
 -- ---------------------------------------------------------------------
 -- RLS Policies
 -- ---------------------------------------------------------------------
 alter table public.accounts enable row level security;
+drop policy if exists accounts_select on public.accounts;
 create policy accounts_select on public.accounts for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
+drop policy if exists accounts_insert on public.accounts;
 create policy accounts_insert on public.accounts for insert
   with check (public.has_org_role(organization_id, array['owner','admin','accountant']));
+drop policy if exists accounts_update on public.accounts;
 create policy accounts_update on public.accounts for update
   using (public.has_org_role(organization_id, array['owner','admin','accountant']))
   with check (public.has_org_role(organization_id, array['owner','admin','accountant']));
+drop policy if exists accounts_delete on public.accounts;
 create policy accounts_delete on public.accounts for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 alter table public.journal_entries enable row level security;
+drop policy if exists journal_entries_select on public.journal_entries;
 create policy journal_entries_select on public.journal_entries for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
+drop policy if exists journal_entries_insert on public.journal_entries;
 create policy journal_entries_insert on public.journal_entries for insert
   with check (public.has_org_role(organization_id, array['owner','admin','accountant']));
+drop policy if exists journal_entries_update on public.journal_entries;
 create policy journal_entries_update on public.journal_entries for update
   using (public.has_org_role(organization_id, array['owner','admin','accountant']))
   with check (public.has_org_role(organization_id, array['owner','admin','accountant']));
+drop policy if exists journal_entries_delete on public.journal_entries;
 create policy journal_entries_delete on public.journal_entries for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 alter table public.journal_lines enable row level security;
+drop policy if exists journal_lines_select on public.journal_lines;
 create policy journal_lines_select on public.journal_lines for select
   using (public.is_org_member((select organization_id from public.journal_entries where id = entry_id)) or public.is_platform_admin());
+drop policy if exists journal_lines_insert on public.journal_lines;
 create policy journal_lines_insert on public.journal_lines for insert
   with check (public.has_org_role((select organization_id from public.journal_entries where id = entry_id), array['owner','admin','accountant']));
+drop policy if exists journal_lines_update on public.journal_lines;
 create policy journal_lines_update on public.journal_lines for update
   using (public.has_org_role((select organization_id from public.journal_entries where id = entry_id), array['owner','admin','accountant']))
   with check (public.has_org_role((select organization_id from public.journal_entries where id = entry_id), array['owner','admin','accountant']));
+drop policy if exists journal_lines_delete on public.journal_lines;
 create policy journal_lines_delete on public.journal_lines for delete
   using (public.has_org_role((select organization_id from public.journal_entries where id = entry_id), array['owner','admin']));
 
 alter table public.payments enable row level security;
+drop policy if exists payments_select on public.payments;
 create policy payments_select on public.payments for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
+drop policy if exists payments_insert on public.payments;
 create policy payments_insert on public.payments for insert
   with check (public.has_org_role(organization_id, array['owner','admin','accountant']));
+drop policy if exists payments_update on public.payments;
 create policy payments_update on public.payments for update
   using (public.has_org_role(organization_id, array['owner','admin','accountant']))
   with check (public.has_org_role(organization_id, array['owner','admin','accountant']));
+drop policy if exists payments_delete on public.payments;
 create policy payments_delete on public.payments for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 alter table public.expenses enable row level security;
+drop policy if exists expenses_select on public.expenses;
 create policy expenses_select on public.expenses for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
+drop policy if exists expenses_insert on public.expenses;
 create policy expenses_insert on public.expenses for insert
   with check (public.has_org_role(organization_id, array['owner','admin','accountant','manager','inventory_manager']));
+drop policy if exists expenses_update on public.expenses;
 create policy expenses_update on public.expenses for update
   using (public.has_org_role(organization_id, array['owner','admin','accountant','manager']))
   with check (public.has_org_role(organization_id, array['owner','admin','accountant','manager']));
+drop policy if exists expenses_delete on public.expenses;
 create policy expenses_delete on public.expenses for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 alter table public.revenues enable row level security;
+drop policy if exists revenues_select on public.revenues;
 create policy revenues_select on public.revenues for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
+drop policy if exists revenues_insert on public.revenues;
 create policy revenues_insert on public.revenues for insert
   with check (public.has_org_role(organization_id, array['owner','admin','accountant','manager']));
+drop policy if exists revenues_update on public.revenues;
 create policy revenues_update on public.revenues for update
   using (public.has_org_role(organization_id, array['owner','admin','accountant','manager']))
   with check (public.has_org_role(organization_id, array['owner','admin','accountant','manager']));
+drop policy if exists revenues_delete on public.revenues;
 create policy revenues_delete on public.revenues for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 alter table public.cost_allocations enable row level security;
+drop policy if exists cost_allocations_select on public.cost_allocations;
 create policy cost_allocations_select on public.cost_allocations for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
+drop policy if exists cost_allocations_insert on public.cost_allocations;
 create policy cost_allocations_insert on public.cost_allocations for insert
   with check (public.has_org_role(organization_id, array['owner','admin','accountant','manager']));
+drop policy if exists cost_allocations_update on public.cost_allocations;
 create policy cost_allocations_update on public.cost_allocations for update
   using (public.has_org_role(organization_id, array['owner','admin','accountant','manager']))
   with check (public.has_org_role(organization_id, array['owner','admin','accountant','manager']));
+drop policy if exists cost_allocations_delete on public.cost_allocations;
 create policy cost_allocations_delete on public.cost_allocations for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 alter table public.cost_centers enable row level security;
+drop policy if exists cost_centers_select on public.cost_centers;
 create policy cost_centers_select on public.cost_centers for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
+drop policy if exists cost_centers_insert on public.cost_centers;
 create policy cost_centers_insert on public.cost_centers for insert
   with check (public.has_org_role(organization_id, array['owner','admin','accountant','manager']));
+drop policy if exists cost_centers_update on public.cost_centers;
 create policy cost_centers_update on public.cost_centers for update
   using (public.has_org_role(organization_id, array['owner','admin','accountant','manager']))
   with check (public.has_org_role(organization_id, array['owner','admin','accountant','manager']));
+drop policy if exists cost_centers_delete on public.cost_centers;
 create policy cost_centers_delete on public.cost_centers for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 alter table public.assets enable row level security;
+drop policy if exists assets_select on public.assets;
 create policy assets_select on public.assets for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
+drop policy if exists assets_insert on public.assets;
 create policy assets_insert on public.assets for insert
   with check (public.has_org_role(organization_id, array['owner','admin','accountant','manager']));
+drop policy if exists assets_update on public.assets;
 create policy assets_update on public.assets for update
   using (public.has_org_role(organization_id, array['owner','admin','accountant','manager']))
   with check (public.has_org_role(organization_id, array['owner','admin','accountant','manager']));
+drop policy if exists assets_delete on public.assets;
 create policy assets_delete on public.assets for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 alter table public.loans enable row level security;
+drop policy if exists loans_select on public.loans;
 create policy loans_select on public.loans for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
+drop policy if exists loans_insert on public.loans;
 create policy loans_insert on public.loans for insert
   with check (public.has_org_role(organization_id, array['owner','admin','accountant']));
+drop policy if exists loans_update on public.loans;
 create policy loans_update on public.loans for update
   using (public.has_org_role(organization_id, array['owner','admin','accountant']))
   with check (public.has_org_role(organization_id, array['owner','admin','accountant']));
+drop policy if exists loans_delete on public.loans;
 create policy loans_delete on public.loans for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 alter table public.loan_repayments enable row level security;
+drop policy if exists loan_repayments_select on public.loan_repayments;
 create policy loan_repayments_select on public.loan_repayments for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
+drop policy if exists loan_repayments_insert on public.loan_repayments;
 create policy loan_repayments_insert on public.loan_repayments for insert
   with check (public.has_org_role(organization_id, array['owner','admin','accountant']));
+drop policy if exists loan_repayments_update on public.loan_repayments;
 create policy loan_repayments_update on public.loan_repayments for update
   using (public.has_org_role(organization_id, array['owner','admin','accountant']))
   with check (public.has_org_role(organization_id, array['owner','admin','accountant']));
+drop policy if exists loan_repayments_delete on public.loan_repayments;
 create policy loan_repayments_delete on public.loan_repayments for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 alter table public.owner_equity enable row level security;
+drop policy if exists owner_equity_select on public.owner_equity;
 create policy owner_equity_select on public.owner_equity for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
+drop policy if exists owner_equity_insert on public.owner_equity;
 create policy owner_equity_insert on public.owner_equity for insert
   with check (public.has_org_role(organization_id, array['owner','admin','accountant']));
+drop policy if exists owner_equity_update on public.owner_equity;
 create policy owner_equity_update on public.owner_equity for update
   using (public.has_org_role(organization_id, array['owner','admin','accountant']))
   with check (public.has_org_role(organization_id, array['owner','admin','accountant']));
+drop policy if exists owner_equity_delete on public.owner_equity;
 create policy owner_equity_delete on public.owner_equity for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
@@ -512,6 +580,7 @@ begin
           case when TG_OP = 'DELETE' then null else to_jsonb(NEW) end);
   return NEW;
 end $$;
+drop trigger if exists audit_journal_entries on public.journal_entries;
 create trigger audit_journal_entries after insert or update or delete on public.journal_entries
   for each row execute function public.audit_journal_entries();
 
@@ -524,5 +593,6 @@ begin
           case when TG_OP = 'DELETE' then null else to_jsonb(NEW) end);
   return NEW;
 end $$;
+drop trigger if exists audit_payments on public.payments;
 create trigger audit_payments after insert or update or delete on public.payments
   for each row execute function public.audit_payments();

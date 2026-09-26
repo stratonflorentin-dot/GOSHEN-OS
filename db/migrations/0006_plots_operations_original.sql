@@ -6,13 +6,12 @@
 --   §19 Production records
 --   + deferred foreign keys left dangling by 0003/0005
 -- Neon / Lakebase Postgres edition.
--- IDempotent version for safe re-execution
 -- =====================================================================
 
 -- =====================================================================
 -- §10  PLOTS  (blocks / plots / subplots)
 -- =====================================================================
-create table if not exists public.plots (
+create table public.plots (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   farm_id uuid not null references public.farms(id) on delete cascade,
@@ -49,19 +48,17 @@ create table if not exists public.plots (
   updated_at timestamptz not null default now(),
   unique (farm_id, code)
 );
-drop trigger if exists plots_touch on public.plots;
 create trigger plots_touch before update on public.plots
   for each row execute function public.touch_updated_at();
-drop trigger if exists plots_created_by on public.plots;
 create trigger plots_created_by before insert on public.plots
   for each row execute function public.set_created_by();
-create index if not exists plots_farm_idx on public.plots (farm_id, status, code);
-create index if not exists plots_org_idx on public.plots (organization_id);
-create index if not exists plots_geometry_gix on public.plots using gist (geometry);
-create index if not exists plots_parent_idx on public.plots (parent_plot_id);
+create index plots_farm_idx on public.plots (farm_id, status, code);
+create index plots_org_idx on public.plots (organization_id);
+create index plots_geometry_gix on public.plots using gist (geometry);
+create index plots_parent_idx on public.plots (parent_plot_id);
 
 -- Immutable boundary history (mirrors farm_boundary_versions)
-create table if not exists public.plot_boundary_versions (
+create table public.plot_boundary_versions (
   id uuid primary key default gen_random_uuid(),
   plot_id uuid not null references public.plots(id) on delete cascade,
   organization_id uuid not null references public.organizations(id) on delete cascade,
@@ -76,64 +73,39 @@ create table if not exists public.plot_boundary_versions (
   created_by uuid not null references public.profiles(id),
   created_at timestamptz not null default now()
 );
-drop trigger if exists pbv_created_by on public.plot_boundary_versions;
 create trigger pbv_created_by before insert on public.plot_boundary_versions
   for each row execute function public.set_created_by();
-drop trigger if exists pbv_immutable on public.plot_boundary_versions;
 create trigger pbv_immutable before update or delete on public.plot_boundary_versions
   for each row execute function public.forbid_mutation();
-create index if not exists pbv_plot_idx on public.plot_boundary_versions (plot_id, created_at desc);
-create index if not exists pbv_gix on public.plot_boundary_versions using gist (geometry);
+create index pbv_plot_idx on public.plot_boundary_versions (plot_id, created_at desc);
+create index pbv_gix on public.plot_boundary_versions using gist (geometry);
 
 -- =====================================================================
 -- Deferred foreign keys from 0003 / 0005 (now that plots exist)
 -- =====================================================================
-do $$
-begin
-  if not exists (select 1 from pg_constraint where conname = 'crop_seasons_plot_fk') then
-    alter table public.crop_seasons
-      add constraint crop_seasons_plot_fk
-      foreign key (plot_id) references public.plots(id) on delete set null;
-  end if;
-end $$;
+alter table public.crop_seasons
+  add constraint crop_seasons_plot_fk
+  foreign key (plot_id) references public.plots(id) on delete set null;
 
-do $$
-begin
-  if not exists (select 1 from pg_constraint where conname = 'harvests_storage_fk') then
-    alter table public.harvests
-      add constraint harvests_storage_fk
-      foreign key (storage_location_id) references public.inventory_locations(id) on delete set null;
-  end if;
-end $$;
+alter table public.harvests
+  add constraint harvests_storage_fk
+  foreign key (storage_location_id) references public.inventory_locations(id) on delete set null;
 
-do $$
-begin
-  if not exists (select 1 from pg_constraint where conname = 'journal_lines_plot_fk') then
-    alter table public.journal_lines
-      add constraint journal_lines_plot_fk
-      foreign key (plot_id) references public.plots(id) on delete set null;
-  end if;
-  if not exists (select 1 from pg_constraint where conname = 'journal_lines_crop_season_fk') then
-    alter table public.journal_lines
-      add constraint journal_lines_crop_season_fk
-      foreign key (crop_season_id) references public.crop_seasons(id) on delete set null;
-  end if;
-  if not exists (select 1 from pg_constraint where conname = 'journal_lines_livestock_batch_fk') then
-    alter table public.journal_lines
-      add constraint journal_lines_livestock_batch_fk
-      foreign key (livestock_batch_id) references public.livestock_batches(id) on delete set null;
-  end if;
-  if not exists (select 1 from pg_constraint where conname = 'journal_lines_cost_center_fk') then
-    alter table public.journal_lines
-      add constraint journal_lines_cost_center_fk
-      foreign key (cost_center_id) references public.cost_centers(id) on delete set null;
-  end if;
-end $$;
+alter table public.journal_lines
+  add constraint journal_lines_plot_fk
+  foreign key (plot_id) references public.plots(id) on delete set null,
+  add constraint journal_lines_crop_season_fk
+  foreign key (crop_season_id) references public.crop_seasons(id) on delete set null,
+  add constraint journal_lines_livestock_batch_fk
+  foreign key (livestock_batch_id) references public.livestock_batches(id) on delete set null,
+  add constraint journal_lines_cost_center_fk
+  foreign key (cost_center_id) references public.cost_centers(id) on delete set null;
 
 -- =====================================================================
--- §33  DOCUMENTS
+-- §33  DOCUMENTS  (created before soil_records so the lab-report FK is
+--      a real constraint rather than a deferred one)
 -- =====================================================================
-create table if not exists public.documents (
+create table public.documents (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   farm_id uuid references public.farms(id) on delete cascade,
@@ -166,29 +138,27 @@ create table if not exists public.documents (
   deleted_at timestamptz,
   unique (organization_id, storage_bucket, storage_path)
 );
-drop trigger if exists documents_touch on public.documents;
 create trigger documents_touch before update on public.documents
   for each row execute function public.touch_updated_at();
-drop trigger if exists documents_created_by on public.documents;
 create trigger documents_created_by before insert on public.documents
   for each row execute function public.set_created_by();
-create index if not exists documents_org_idx on public.documents (organization_id, document_type, created_at desc)
+create index documents_org_idx on public.documents (organization_id, document_type, created_at desc)
   where deleted_at is null;
-create index if not exists documents_farm_idx on public.documents (farm_id) where deleted_at is null;
-create index if not exists documents_plot_idx on public.documents (plot_id) where deleted_at is null;
-create index if not exists documents_crop_idx on public.documents (crop_season_id) where deleted_at is null;
-create index if not exists documents_livestock_idx on public.documents (livestock_batch_id) where deleted_at is null;
-create index if not exists documents_expiry_idx on public.documents (organization_id, expiry_date)
+create index documents_farm_idx on public.documents (farm_id) where deleted_at is null;
+create index documents_plot_idx on public.documents (plot_id) where deleted_at is null;
+create index documents_crop_idx on public.documents (crop_season_id) where deleted_at is null;
+create index documents_livestock_idx on public.documents (livestock_batch_id) where deleted_at is null;
+create index documents_expiry_idx on public.documents (organization_id, expiry_date)
   where expiry_date is not null and deleted_at is null;
 
 -- =====================================================================
--- §22  LABOR
+-- §22  LABOR  — workers + labor_records
 -- =====================================================================
-create table if not exists public.workers (
+create table public.workers (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   farm_id uuid references public.farms(id) on delete set null,
-  user_id uuid references public.profiles(id) on delete set null,
+  user_id uuid references public.profiles(id) on delete set null, -- link to a platform login
   full_name text not null check (length(btrim(full_name)) between 1 and 160),
   code text check (code is null or code ~ '^[A-Za-z0-9_-]{1,40}$'),
   worker_type text not null default 'casual'
@@ -218,16 +188,14 @@ create table if not exists public.workers (
   updated_at timestamptz not null default now(),
   unique (organization_id, code)
 );
-drop trigger if exists workers_touch on public.workers;
 create trigger workers_touch before update on public.workers
   for each row execute function public.touch_updated_at();
-drop trigger if exists workers_created_by on public.workers;
 create trigger workers_created_by before insert on public.workers
   for each row execute function public.set_created_by();
-create index if not exists workers_org_idx on public.workers (organization_id, is_active, full_name);
-create index if not exists workers_farm_idx on public.workers (farm_id);
+create index workers_org_idx on public.workers (organization_id, is_active, full_name);
+create index workers_farm_idx on public.workers (farm_id);
 
-create table if not exists public.labor_records (
+create table public.labor_records (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   farm_id uuid not null references public.farms(id) on delete cascade,
@@ -235,7 +203,7 @@ create table if not exists public.labor_records (
   crop_season_id uuid references public.crop_seasons(id) on delete set null,
   livestock_batch_id uuid references public.livestock_batches(id) on delete set null,
   crop_activity_id uuid references public.crop_activities(id) on delete set null,
-  task_id uuid,
+  task_id uuid,  -- FK added after tasks
   worker_id uuid not null references public.workers(id) on delete restrict,
   work_date date not null,
   task_description text not null check (length(btrim(task_description)) between 1 and 400),
@@ -268,24 +236,22 @@ create table if not exists public.labor_records (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-drop trigger if exists labor_records_touch on public.labor_records;
 create trigger labor_records_touch before update on public.labor_records
   for each row execute function public.touch_updated_at();
-drop trigger if exists labor_records_created_by on public.labor_records;
 create trigger labor_records_created_by before insert on public.labor_records
   for each row execute function public.set_created_by();
-create index if not exists labor_records_org_idx on public.labor_records (organization_id, work_date desc);
-create index if not exists labor_records_farm_idx on public.labor_records (farm_id, work_date desc);
-create index if not exists labor_records_worker_idx on public.labor_records (worker_id, work_date desc);
-create index if not exists labor_records_plot_idx on public.labor_records (plot_id);
-create index if not exists labor_records_crop_idx on public.labor_records (crop_season_id);
-create index if not exists labor_records_livestock_idx on public.labor_records (livestock_batch_id);
-create index if not exists labor_records_paystatus_idx on public.labor_records (organization_id, payment_status);
+create index labor_records_org_idx on public.labor_records (organization_id, work_date desc);
+create index labor_records_farm_idx on public.labor_records (farm_id, work_date desc);
+create index labor_records_worker_idx on public.labor_records (worker_id, work_date desc);
+create index labor_records_plot_idx on public.labor_records (plot_id);
+create index labor_records_crop_idx on public.labor_records (crop_season_id);
+create index labor_records_livestock_idx on public.labor_records (livestock_batch_id);
+create index labor_records_paystatus_idx on public.labor_records (organization_id, payment_status);
 
 -- =====================================================================
 -- §23  EQUIPMENT
 -- =====================================================================
-create table if not exists public.equipment (
+create table public.equipment (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   farm_id uuid references public.farms(id) on delete set null,
@@ -318,16 +284,14 @@ create table if not exists public.equipment (
   updated_at timestamptz not null default now(),
   unique (organization_id, code)
 );
-drop trigger if exists equipment_touch on public.equipment;
 create trigger equipment_touch before update on public.equipment
   for each row execute function public.touch_updated_at();
-drop trigger if exists equipment_created_by on public.equipment;
 create trigger equipment_created_by before insert on public.equipment
   for each row execute function public.set_created_by();
-create index if not exists equipment_org_idx on public.equipment (organization_id, status, category);
-create index if not exists equipment_farm_idx on public.equipment (farm_id);
+create index equipment_org_idx on public.equipment (organization_id, status, category);
+create index equipment_farm_idx on public.equipment (farm_id);
 
-create table if not exists public.equipment_usage (
+create table public.equipment_usage (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   farm_id uuid not null references public.farms(id) on delete cascade,
@@ -336,7 +300,7 @@ create table if not exists public.equipment_usage (
   crop_season_id uuid references public.crop_seasons(id) on delete set null,
   livestock_batch_id uuid references public.livestock_batches(id) on delete set null,
   crop_activity_id uuid references public.crop_activities(id) on delete set null,
-  task_id uuid,
+  task_id uuid,  -- FK added after tasks
   operator_worker_id uuid references public.workers(id) on delete set null,
   usage_date date not null,
   start_meter numeric(12,2),
@@ -359,18 +323,16 @@ create table if not exists public.equipment_usage (
   updated_at timestamptz not null default now(),
   check (end_meter is null or start_meter is null or end_meter >= start_meter)
 );
-drop trigger if exists equipment_usage_touch on public.equipment_usage;
 create trigger equipment_usage_touch before update on public.equipment_usage
   for each row execute function public.touch_updated_at();
-drop trigger if exists equipment_usage_created_by on public.equipment_usage;
 create trigger equipment_usage_created_by before insert on public.equipment_usage
   for each row execute function public.set_created_by();
-create index if not exists equipment_usage_org_idx on public.equipment_usage (organization_id, usage_date desc);
-create index if not exists equipment_usage_eq_idx on public.equipment_usage (equipment_id, usage_date desc);
-create index if not exists equipment_usage_farm_idx on public.equipment_usage (farm_id, usage_date desc);
-create index if not exists equipment_usage_plot_idx on public.equipment_usage (plot_id);
+create index equipment_usage_org_idx on public.equipment_usage (organization_id, usage_date desc);
+create index equipment_usage_eq_idx on public.equipment_usage (equipment_id, usage_date desc);
+create index equipment_usage_farm_idx on public.equipment_usage (farm_id, usage_date desc);
+create index equipment_usage_plot_idx on public.equipment_usage (plot_id);
 
-create table if not exists public.maintenance_records (
+create table public.maintenance_records (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   farm_id uuid references public.farms(id) on delete set null,
@@ -401,21 +363,19 @@ create table if not exists public.maintenance_records (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-drop trigger if exists maintenance_records_touch on public.maintenance_records;
 create trigger maintenance_records_touch before update on public.maintenance_records
   for each row execute function public.touch_updated_at();
-drop trigger if exists maintenance_records_created_by on public.maintenance_records;
 create trigger maintenance_records_created_by before insert on public.maintenance_records
   for each row execute function public.set_created_by();
-create index if not exists maintenance_eq_idx on public.maintenance_records (equipment_id, maintenance_date desc);
-create index if not exists maintenance_org_idx on public.maintenance_records (organization_id, maintenance_date desc);
-create index if not exists maintenance_next_idx on public.maintenance_records (organization_id, next_service_date)
+create index maintenance_eq_idx on public.maintenance_records (equipment_id, maintenance_date desc);
+create index maintenance_org_idx on public.maintenance_records (organization_id, maintenance_date desc);
+create index maintenance_next_idx on public.maintenance_records (organization_id, next_service_date)
   where next_service_date is not null;
 
 -- =====================================================================
--- §24  IRRIGATION
+-- §24  IRRIGATION  — water sources, zones, events
 -- =====================================================================
-create table if not exists public.water_sources (
+create table public.water_sources (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   farm_id uuid not null references public.farms(id) on delete cascade,
@@ -442,16 +402,14 @@ create table if not exists public.water_sources (
   updated_at timestamptz not null default now(),
   unique (farm_id, code)
 );
-drop trigger if exists water_sources_touch on public.water_sources;
 create trigger water_sources_touch before update on public.water_sources
   for each row execute function public.touch_updated_at();
-drop trigger if exists water_sources_created_by on public.water_sources;
 create trigger water_sources_created_by before insert on public.water_sources
   for each row execute function public.set_created_by();
-create index if not exists water_sources_farm_idx on public.water_sources (farm_id, is_active);
-create index if not exists water_sources_geometry_gix on public.water_sources using gist (geometry);
+create index water_sources_farm_idx on public.water_sources (farm_id, is_active);
+create index water_sources_geometry_gix on public.water_sources using gist (geometry);
 
-create table if not exists public.irrigation_zones (
+create table public.irrigation_zones (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   farm_id uuid not null references public.farms(id) on delete cascade,
@@ -473,17 +431,15 @@ create table if not exists public.irrigation_zones (
   updated_at timestamptz not null default now(),
   unique (farm_id, code)
 );
-drop trigger if exists irrigation_zones_touch on public.irrigation_zones;
 create trigger irrigation_zones_touch before update on public.irrigation_zones
   for each row execute function public.touch_updated_at();
-drop trigger if exists irrigation_zones_created_by on public.irrigation_zones;
 create trigger irrigation_zones_created_by before insert on public.irrigation_zones
   for each row execute function public.set_created_by();
-create index if not exists irrigation_zones_farm_idx on public.irrigation_zones (farm_id, status);
-create index if not exists irrigation_zones_source_idx on public.irrigation_zones (water_source_id);
-create index if not exists irrigation_zones_geometry_gix on public.irrigation_zones using gist (geometry);
+create index irrigation_zones_farm_idx on public.irrigation_zones (farm_id, status);
+create index irrigation_zones_source_idx on public.irrigation_zones (water_source_id);
+create index irrigation_zones_geometry_gix on public.irrigation_zones using gist (geometry);
 
-create table if not exists public.irrigation_records (
+create table public.irrigation_records (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   farm_id uuid not null references public.farms(id) on delete cascade,
@@ -493,7 +449,7 @@ create table if not exists public.irrigation_records (
   crop_season_id uuid references public.crop_seasons(id) on delete set null,
   crop_activity_id uuid references public.crop_activities(id) on delete set null,
   equipment_id uuid references public.equipment(id) on delete set null,
-  task_id uuid,
+  task_id uuid,  -- FK added after tasks
   irrigation_date date not null,
   start_time time,
   end_time time,
@@ -519,22 +475,21 @@ create table if not exists public.irrigation_records (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-drop trigger if exists irrigation_records_touch on public.irrigation_records;
 create trigger irrigation_records_touch before update on public.irrigation_records
   for each row execute function public.touch_updated_at();
-drop trigger if exists irrigation_records_created_by on public.irrigation_records;
 create trigger irrigation_records_created_by before insert on public.irrigation_records
   for each row execute function public.set_created_by();
-create index if not exists irrigation_records_org_idx on public.irrigation_records (organization_id, irrigation_date desc);
-create index if not exists irrigation_records_farm_idx on public.irrigation_records (farm_id, irrigation_date desc);
-create index if not exists irrigation_records_plot_idx on public.irrigation_records (plot_id, irrigation_date desc);
-create index if not exists irrigation_records_zone_idx on public.irrigation_records (zone_id, irrigation_date desc);
-create index if not exists irrigation_records_crop_idx on public.irrigation_records (crop_season_id);
+create index irrigation_records_org_idx on public.irrigation_records (organization_id, irrigation_date desc);
+create index irrigation_records_farm_idx on public.irrigation_records (farm_id, irrigation_date desc);
+create index irrigation_records_plot_idx on public.irrigation_records (plot_id, irrigation_date desc);
+create index irrigation_records_zone_idx on public.irrigation_records (zone_id, irrigation_date desc);
+create index irrigation_records_crop_idx on public.irrigation_records (crop_season_id);
 
 -- =====================================================================
--- §25  SOIL
+-- §25  SOIL  — lab-backed soil records. No fabricated values: every
+--      measurement column is nullable and lab provenance is recorded.
 -- =====================================================================
-create table if not exists public.soil_records (
+create table public.soil_records (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   farm_id uuid not null references public.farms(id) on delete cascade,
@@ -546,6 +501,7 @@ create table if not exists public.soil_records (
   lab_name text,
   lab_reference text,
   lab_report_document_id uuid references public.documents(id) on delete set null,
+  -- chemistry (nullable: absence means "not measured", never "zero")
   ph numeric(4,2) check (ph is null or (ph >= 0 and ph <= 14)),
   organic_matter_pct numeric(6,3) check (organic_matter_pct is null or organic_matter_pct >= 0),
   organic_carbon_pct numeric(6,3),
@@ -557,6 +513,7 @@ create table if not exists public.soil_records (
   sulfur_ppm numeric(10,2),
   cec_meq_100g numeric(8,2),
   electrical_conductivity_ds_m numeric(8,3),
+  -- physical
   moisture_pct numeric(6,2) check (moisture_pct is null or (moisture_pct >= 0 and moisture_pct <= 100)),
   texture text check (texture is null or texture in (
     'sand','loamy_sand','sandy_loam','loam','silt_loam','silt','silt_clay',
@@ -564,6 +521,7 @@ create table if not exists public.soil_records (
   )),
   bulk_density_g_cm3 numeric(6,3),
   water_holding_capacity_pct numeric(6,2),
+  -- extra micronutrients / any lab panel kept verbatim
   micronutrients jsonb,
   raw_lab_payload jsonb,
   interpretation text,
@@ -573,20 +531,18 @@ create table if not exists public.soil_records (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-drop trigger if exists soil_records_touch on public.soil_records;
 create trigger soil_records_touch before update on public.soil_records
   for each row execute function public.touch_updated_at();
-drop trigger if exists soil_records_created_by on public.soil_records;
 create trigger soil_records_created_by before insert on public.soil_records
   for each row execute function public.set_created_by();
-create index if not exists soil_records_org_idx on public.soil_records (organization_id, sample_date desc);
-create index if not exists soil_records_plot_idx on public.soil_records (plot_id, sample_date desc);
-create index if not exists soil_records_farm_idx on public.soil_records (farm_id, sample_date desc);
+create index soil_records_org_idx on public.soil_records (organization_id, sample_date desc);
+create index soil_records_plot_idx on public.soil_records (plot_id, sample_date desc);
+create index soil_records_farm_idx on public.soil_records (farm_id, sample_date desc);
 
 -- =====================================================================
 -- §32  TASKS
 -- =====================================================================
-create table if not exists public.tasks (
+create table public.tasks (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   farm_id uuid not null references public.farms(id) on delete cascade,
@@ -629,22 +585,20 @@ create table if not exists public.tasks (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-drop trigger if exists tasks_touch on public.tasks;
 create trigger tasks_touch before update on public.tasks
   for each row execute function public.touch_updated_at();
-drop trigger if exists tasks_created_by on public.tasks;
 create trigger tasks_created_by before insert on public.tasks
   for each row execute function public.set_created_by();
-create index if not exists tasks_org_idx on public.tasks (organization_id, status, due_date);
-create index if not exists tasks_farm_idx on public.tasks (farm_id, status, due_date);
-create index if not exists tasks_assignee_idx on public.tasks (assigned_to, status);
-create index if not exists tasks_worker_idx on public.tasks (assigned_worker_id, status);
-create index if not exists tasks_plot_idx on public.tasks (plot_id);
-create index if not exists tasks_due_idx on public.tasks (organization_id, due_date)
+create index tasks_org_idx on public.tasks (organization_id, status, due_date);
+create index tasks_farm_idx on public.tasks (farm_id, status, due_date);
+create index tasks_assignee_idx on public.tasks (assigned_to, status);
+create index tasks_worker_idx on public.tasks (assigned_worker_id, status);
+create index tasks_plot_idx on public.tasks (plot_id);
+create index tasks_due_idx on public.tasks (organization_id, due_date)
   where status in ('pending','assigned','in_progress','blocked');
-create index if not exists tasks_parent_idx on public.tasks (parent_task_id);
+create index tasks_parent_idx on public.tasks (parent_task_id);
 
-create table if not exists public.task_comments (
+create table public.task_comments (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   task_id uuid not null references public.tasks(id) on delete cascade,
@@ -653,32 +607,23 @@ create table if not exists public.task_comments (
   attachment_document_id uuid references public.documents(id) on delete set null,
   created_at timestamptz not null default now()
 );
-create index if not exists task_comments_task_idx on public.task_comments (task_id, created_at);
+create index task_comments_task_idx on public.task_comments (task_id, created_at);
 
 -- Deferred FKs now that tasks exists
-do $$
-begin
-  if not exists (select 1 from pg_constraint where conname = 'labor_records_task_fk') then
-    alter table public.labor_records
-      add constraint labor_records_task_fk
-      foreign key (task_id) references public.tasks(id) on delete set null;
-  end if;
-  if not exists (select 1 from pg_constraint where conname = 'equipment_usage_task_fk') then
-    alter table public.equipment_usage
-      add constraint equipment_usage_task_fk
-      foreign key (task_id) references public.tasks(id) on delete set null;
-  end if;
-  if not exists (select 1 from pg_constraint where conname = 'irrigation_records_task_fk') then
-    alter table public.irrigation_records
-      add constraint irrigation_records_task_fk
-      foreign key (task_id) references public.tasks(id) on delete set null;
-  end if;
-end $$;
+alter table public.labor_records
+  add constraint labor_records_task_fk
+  foreign key (task_id) references public.tasks(id) on delete set null;
+alter table public.equipment_usage
+  add constraint equipment_usage_task_fk
+  foreign key (task_id) references public.tasks(id) on delete set null;
+alter table public.irrigation_records
+  add constraint irrigation_records_task_fk
+  foreign key (task_id) references public.tasks(id) on delete set null;
 
 -- =====================================================================
--- §19  PRODUCTION RECORDS
+-- §19  PRODUCTION RECORDS  (beyond crop harvests: milk, eggs, wool, honey…)
 -- =====================================================================
-create table if not exists public.production_records (
+create table public.production_records (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   farm_id uuid not null references public.farms(id) on delete cascade,
@@ -708,20 +653,19 @@ create table if not exists public.production_records (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-drop trigger if exists production_records_touch on public.production_records;
 create trigger production_records_touch before update on public.production_records
   for each row execute function public.touch_updated_at();
-drop trigger if exists production_records_created_by on public.production_records;
 create trigger production_records_created_by before insert on public.production_records
   for each row execute function public.set_created_by();
-create index if not exists production_records_org_idx on public.production_records (organization_id, record_date desc);
-create index if not exists production_records_farm_idx on public.production_records (farm_id, record_date desc);
-create index if not exists production_records_crop_idx on public.production_records (crop_season_id);
-create index if not exists production_records_livestock_idx on public.production_records (livestock_batch_id);
-create index if not exists production_records_plot_idx on public.production_records (plot_id);
+create index production_records_org_idx on public.production_records (organization_id, record_date desc);
+create index production_records_farm_idx on public.production_records (farm_id, record_date desc);
+create index production_records_crop_idx on public.production_records (crop_season_id);
+create index production_records_livestock_idx on public.production_records (livestock_batch_id);
+create index production_records_plot_idx on public.production_records (plot_id);
 
 -- =====================================================================
--- §31  STORAGE VIEW
+-- §31  STORAGE  (warehouses / cold rooms / silos are inventory_locations
+--      with a storage location_type; this view is the storage dashboard)
 -- =====================================================================
 create or replace view public.storage_overview as
 select
@@ -783,239 +727,182 @@ where cs.plot_id is not null;
 
 -- plots
 alter table public.plots enable row level security;
-drop policy if exists plots_select on public.plots;
 create policy plots_select on public.plots for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
-drop policy if exists plots_insert on public.plots;
 create policy plots_insert on public.plots for insert
   with check (public.has_org_role(organization_id, array['owner','admin','manager','agronomist']));
-drop policy if exists plots_update on public.plots;
 create policy plots_update on public.plots for update
   using (public.has_org_role(organization_id, array['owner','admin','manager','agronomist']))
   with check (public.has_org_role(organization_id, array['owner','admin','manager','agronomist']));
-drop policy if exists plots_delete on public.plots;
 create policy plots_delete on public.plots for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 -- plot_boundary_versions
 alter table public.plot_boundary_versions enable row level security;
-drop policy if exists pbv_select on public.plot_boundary_versions;
 create policy pbv_select on public.plot_boundary_versions for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
-drop policy if exists pbv_insert on public.plot_boundary_versions;
 create policy pbv_insert on public.plot_boundary_versions for insert
   with check (public.has_org_role(organization_id, array['owner','admin','manager','agronomist']));
 
 -- documents
 alter table public.documents enable row level security;
-drop policy if exists documents_select on public.documents;
 create policy documents_select on public.documents for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
-drop policy if exists documents_insert on public.documents;
 create policy documents_insert on public.documents for insert
   with check (public.has_org_role(organization_id,
     array['owner','admin','manager','accountant','agronomist','veterinarian','inventory_manager']));
-drop policy if exists documents_update on public.documents;
 create policy documents_update on public.documents for update
   using (public.has_org_role(organization_id,
     array['owner','admin','manager','accountant','agronomist','veterinarian','inventory_manager']))
   with check (public.has_org_role(organization_id,
     array['owner','admin','manager','accountant','agronomist','veterinarian','inventory_manager']));
-drop policy if exists documents_delete on public.documents;
 create policy documents_delete on public.documents for delete
   using (public.has_org_role(organization_id, array['owner','admin','manager']));
 
 -- workers
 alter table public.workers enable row level security;
-drop policy if exists workers_select on public.workers;
 create policy workers_select on public.workers for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
-drop policy if exists workers_insert on public.workers;
 create policy workers_insert on public.workers for insert
   with check (public.has_org_role(organization_id, array['owner','admin','manager']));
-drop policy if exists workers_update on public.workers;
 create policy workers_update on public.workers for update
   using (public.has_org_role(organization_id, array['owner','admin','manager']))
   with check (public.has_org_role(organization_id, array['owner','admin','manager']));
-drop policy if exists workers_delete on public.workers;
 create policy workers_delete on public.workers for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 -- labor_records
 alter table public.labor_records enable row level security;
-drop policy if exists labor_records_select on public.labor_records;
 create policy labor_records_select on public.labor_records for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
-drop policy if exists labor_records_insert on public.labor_records;
 create policy labor_records_insert on public.labor_records for insert
   with check (public.has_org_role(organization_id,
     array['owner','admin','manager','accountant','agronomist','worker']));
-drop policy if exists labor_records_update on public.labor_records;
 create policy labor_records_update on public.labor_records for update
   using (public.has_org_role(organization_id, array['owner','admin','manager','accountant']))
   with check (public.has_org_role(organization_id, array['owner','admin','manager','accountant']));
-drop policy if exists labor_records_delete on public.labor_records;
 create policy labor_records_delete on public.labor_records for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 -- equipment
 alter table public.equipment enable row level security;
-drop policy if exists equipment_select on public.equipment;
 create policy equipment_select on public.equipment for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
-drop policy if exists equipment_insert on public.equipment;
 create policy equipment_insert on public.equipment for insert
   with check (public.has_org_role(organization_id, array['owner','admin','manager']));
-drop policy if exists equipment_update on public.equipment;
 create policy equipment_update on public.equipment for update
   using (public.has_org_role(organization_id, array['owner','admin','manager']))
   with check (public.has_org_role(organization_id, array['owner','admin','manager']));
-drop policy if exists equipment_delete on public.equipment;
 create policy equipment_delete on public.equipment for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 -- equipment_usage
 alter table public.equipment_usage enable row level security;
-drop policy if exists equipment_usage_select on public.equipment_usage;
 create policy equipment_usage_select on public.equipment_usage for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
-drop policy if exists equipment_usage_insert on public.equipment_usage;
 create policy equipment_usage_insert on public.equipment_usage for insert
   with check (public.has_org_role(organization_id,
     array['owner','admin','manager','accountant','agronomist','worker']));
-drop policy if exists equipment_usage_update on public.equipment_usage;
 create policy equipment_usage_update on public.equipment_usage for update
   using (public.has_org_role(organization_id, array['owner','admin','manager','accountant']))
   with check (public.has_org_role(organization_id, array['owner','admin','manager','accountant']));
-drop policy if exists equipment_usage_delete on public.equipment_usage;
 create policy equipment_usage_delete on public.equipment_usage for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 -- maintenance_records
 alter table public.maintenance_records enable row level security;
-drop policy if exists maintenance_select on public.maintenance_records;
 create policy maintenance_select on public.maintenance_records for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
-drop policy if exists maintenance_insert on public.maintenance_records;
 create policy maintenance_insert on public.maintenance_records for insert
   with check (public.has_org_role(organization_id, array['owner','admin','manager','accountant']));
-drop policy if exists maintenance_update on public.maintenance_records;
 create policy maintenance_update on public.maintenance_records for update
   using (public.has_org_role(organization_id, array['owner','admin','manager','accountant']))
   with check (public.has_org_role(organization_id, array['owner','admin','manager','accountant']));
-drop policy if exists maintenance_delete on public.maintenance_records;
 create policy maintenance_delete on public.maintenance_records for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 -- water_sources
 alter table public.water_sources enable row level security;
-drop policy if exists water_sources_select on public.water_sources;
 create policy water_sources_select on public.water_sources for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
-drop policy if exists water_sources_insert on public.water_sources;
 create policy water_sources_insert on public.water_sources for insert
   with check (public.has_org_role(organization_id, array['owner','admin','manager','agronomist']));
-drop policy if exists water_sources_update on public.water_sources;
 create policy water_sources_update on public.water_sources for update
   using (public.has_org_role(organization_id, array['owner','admin','manager','agronomist']))
   with check (public.has_org_role(organization_id, array['owner','admin','manager','agronomist']));
-drop policy if exists water_sources_delete on public.water_sources;
 create policy water_sources_delete on public.water_sources for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 -- irrigation_zones
 alter table public.irrigation_zones enable row level security;
-drop policy if exists irrigation_zones_select on public.irrigation_zones;
 create policy irrigation_zones_select on public.irrigation_zones for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
-drop policy if exists irrigation_zones_insert on public.irrigation_zones;
 create policy irrigation_zones_insert on public.irrigation_zones for insert
   with check (public.has_org_role(organization_id, array['owner','admin','manager','agronomist']));
-drop policy if exists irrigation_zones_update on public.irrigation_zones;
 create policy irrigation_zones_update on public.irrigation_zones for update
   using (public.has_org_role(organization_id, array['owner','admin','manager','agronomist']))
   with check (public.has_org_role(organization_id, array['owner','admin','manager','agronomist']));
-drop policy if exists irrigation_zones_delete on public.irrigation_zones;
 create policy irrigation_zones_delete on public.irrigation_zones for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 -- irrigation_records
 alter table public.irrigation_records enable row level security;
-drop policy if exists irrigation_records_select on public.irrigation_records;
 create policy irrigation_records_select on public.irrigation_records for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
-drop policy if exists irrigation_records_insert on public.irrigation_records;
 create policy irrigation_records_insert on public.irrigation_records for insert
   with check (public.has_org_role(organization_id,
     array['owner','admin','manager','accountant','agronomist','worker']));
-drop policy if exists irrigation_records_update on public.irrigation_records;
 create policy irrigation_records_update on public.irrigation_records for update
   using (public.has_org_role(organization_id, array['owner','admin','manager','accountant','agronomist']))
   with check (public.has_org_role(organization_id, array['owner','admin','manager','accountant','agronomist']));
-drop policy if exists irrigation_records_delete on public.irrigation_records;
 create policy irrigation_records_delete on public.irrigation_records for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 -- soil_records
 alter table public.soil_records enable row level security;
-drop policy if exists soil_records_select on public.soil_records;
 create policy soil_records_select on public.soil_records for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
-drop policy if exists soil_records_insert on public.soil_records;
 create policy soil_records_insert on public.soil_records for insert
   with check (public.has_org_role(organization_id, array['owner','admin','manager','agronomist']));
-drop policy if exists soil_records_update on public.soil_records;
 create policy soil_records_update on public.soil_records for update
   using (public.has_org_role(organization_id, array['owner','admin','manager','agronomist']))
   with check (public.has_org_role(organization_id, array['owner','admin','manager','agronomist']));
-drop policy if exists soil_records_delete on public.soil_records;
 create policy soil_records_delete on public.soil_records for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 
 -- tasks
 alter table public.tasks enable row level security;
-drop policy if exists tasks_select on public.tasks;
 create policy tasks_select on public.tasks for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
-drop policy if exists tasks_insert on public.tasks;
 create policy tasks_insert on public.tasks for insert
   with check (public.has_org_role(organization_id,
     array['owner','admin','manager','agronomist','veterinarian','accountant']));
-drop policy if exists tasks_update on public.tasks;
 create policy tasks_update on public.tasks for update
   using (public.is_org_member(organization_id) or public.is_platform_admin())
   with check (public.is_org_member(organization_id) or public.is_platform_admin());
-drop policy if exists tasks_delete on public.tasks;
 create policy tasks_delete on public.tasks for delete
   using (public.has_org_role(organization_id, array['owner','admin','manager']));
 
 -- task_comments
 alter table public.task_comments enable row level security;
-drop policy if exists task_comments_select on public.task_comments;
 create policy task_comments_select on public.task_comments for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
-drop policy if exists task_comments_insert on public.task_comments;
 create policy task_comments_insert on public.task_comments for insert
   with check (public.is_org_member(organization_id));
-drop policy if exists task_comments_delete on public.task_comments;
 create policy task_comments_delete on public.task_comments for delete
   using (public.has_org_role(organization_id, array['owner','admin','manager'])
          or author_id = public.app_uid());
 
 -- production_records
 alter table public.production_records enable row level security;
-drop policy if exists production_records_select on public.production_records;
 create policy production_records_select on public.production_records for select
   using (public.is_org_member(organization_id) or public.is_platform_admin());
-drop policy if exists production_records_insert on public.production_records;
 create policy production_records_insert on public.production_records for insert
   with check (public.has_org_role(organization_id,
     array['owner','admin','manager','agronomist','veterinarian','worker']));
-drop policy if exists production_records_update on public.production_records;
 create policy production_records_update on public.production_records for update
   using (public.has_org_role(organization_id, array['owner','admin','manager','accountant','agronomist']))
   with check (public.has_org_role(organization_id, array['owner','admin','manager','accountant','agronomist']));
-drop policy if exists production_records_delete on public.production_records;
 create policy production_records_delete on public.production_records for delete
   using (public.has_org_role(organization_id, array['owner','admin']));
 

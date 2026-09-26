@@ -64,7 +64,7 @@ export type SqlExecutor = postgres.TransactionSql<Record<string, unknown>>;
  */
 export async function withUser<T>(userId: string, fn: (tx: SqlExecutor) => Promise<T>): Promise<T> {
   const result = await appSql.begin(async (tx) => {
-    await tx.unsafe(`select set_config('app.user_id', $1, true)`, [userId]);
+    await tx`select set_config('app.user_id', ${userId}, true)`;
     return fn(tx as SqlExecutor);
   });
   return result as T;

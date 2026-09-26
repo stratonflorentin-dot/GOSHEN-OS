@@ -953,23 +953,36 @@ export async function getFinancialSummary(userId: string, organizationId: string
   accountsPayable: number;
 }> {
   return withUser(userId, async (db) => {
-    let dateFilter = "";
-    const params: (string | number)[] = [organizationId];
-    if (fromDate) {
-      dateFilter += " and expense_date >= $" + (params.length + 1);
-      params.push(fromDate);
-    }
-    if (toDate) {
-      dateFilter += " and expense_date <= $" + (params.length + 1);
-      params.push(toDate);
-    }
-
     const [expenses, revenues, payments, ar, ap] = await Promise.all([
-      db.unsafe(`select sum(amount)::numeric as total from public.expenses where organization_id = $1 ${dateFilter}`, params),
-      db.unsafe(`select sum(amount)::numeric as total from public.revenues where organization_id = $1 ${dateFilter.replace("expense_date", "revenue_date")}`, params),
-      db.unsafe(`select sum(case when payment_type = 'receipt' then amount else -amount end)::numeric as total from public.payments where organization_id = $1 and status = 'cleared'`, [organizationId]),
-      db.unsafe(`select sum(amount)::numeric as total from public.revenues where organization_id = $1 and payment_status != 'paid'`, [organizationId]),
-      db.unsafe(`select sum(amount)::numeric as total from public.expenses where organization_id = $1 and payment_status != 'paid'`, [organizationId]),
+      db`
+        select sum(amount)::numeric as total 
+        from public.expenses 
+        where organization_id = ${organizationId}
+          and (${fromDate}::date is null or expense_date >= ${fromDate}::date)
+          and (${toDate}::date is null or expense_date <= ${toDate}::date)
+      `,
+      db`
+        select sum(amount)::numeric as total 
+        from public.revenues 
+        where organization_id = ${organizationId}
+          and (${fromDate}::date is null or revenue_date >= ${fromDate}::date)
+          and (${toDate}::date is null or revenue_date <= ${toDate}::date)
+      `,
+      db`
+        select sum(case when payment_type = 'receipt' then amount else -amount end)::numeric as total 
+        from public.payments 
+        where organization_id = ${organizationId} and status = 'cleared'
+      `,
+      db`
+        select sum(amount)::numeric as total 
+        from public.revenues 
+        where organization_id = ${organizationId} and payment_status != 'paid'
+      `,
+      db`
+        select sum(amount)::numeric as total 
+        from public.expenses 
+        where organization_id = ${organizationId} and payment_status != 'paid'
+      `,
     ]);
 
     const totalRevenue = Number(revenues[0]?.total ?? 0);

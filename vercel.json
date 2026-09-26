@@ -1,0 +1,19 @@
+{
+  "buildCommand": "npx next build --webpack",
+  "devCommand": "npx next dev",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["iad1"],
+  "env": {
+    "NEXT_PUBLIC_MAPTILES_URL": "https://tiles.openstreetmap.org/{z}/{x}/{y}.png",
+    "NEXT_PUBLIC_DEFAULT_LAT": "-6.3690",
+    "NEXT_PUBLIC_DEFAULT_LNG": "34.8888"
+  },
+  "build": {
+    "env": {
+      "NEXT_PUBLIC_MAPTILES_URL": "https://tiles.openstreetmap.org/{z}/{x}/{y}.png",
+      "NEXT_PUBLIC_DEFAULT_LAT": "-6.3690",
+      "NEXT_PUBLIC_DEFAULT_LNG": "34.8888"
+    }
+  }
+}

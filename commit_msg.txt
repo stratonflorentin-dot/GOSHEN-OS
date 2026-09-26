@@ -1,9 +1,0 @@
-feat: Phase 6 - Plots + Operations  
-  
-- Migration 0006: plots, plot_boundary_versions, workers, labor_records, equipment, equipment_usage, maintenance_records, water_sources, irrigation_zones, irrigation_records, soil_records, tasks, task_comments, production_records, documents  
-- Migration 0007: harvests unit_price + total_value  
-- Services: plotService, laborService, equipmentService, irrigationService, soilService, taskService, documentService, productionService  
-- Validation: plots.ts, operations.ts  
-- UI: /plots (list), /plots/new (GPS boundary capture), /plots/[plotId] (detail with tabs)  
-- RLS enforcement via least-privilege app role (DATABASE_URL_APP)  
-- scripts/verify-rls.ts: 14/14 assertions pass  

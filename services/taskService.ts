@@ -90,13 +90,6 @@ function toTask(row: Record<string, unknown>): Task {
   };
 }
 
-const TASK_SELECT = `
-  select t.*, p.code as plot_code, w.full_name as assigned_worker_name
-  from public.tasks t
-  left join public.plots p on p.id = t.plot_id
-  left join public.workers w on w.id = t.assigned_worker_id
-`;
-
 export async function createTask(userId: string, input: CreateTaskInput): Promise<Task> {
   return withUser(userId, async (db) => {
     const rows = await db`
@@ -135,36 +128,36 @@ export async function listTasks(
 ): Promise<Task[]> {
   return withUser(userId, async (db) => {
     const limit = Math.min(Math.max(opts.limit ?? 200, 1), 1000);
-    const rows = await db.unsafe(
-      `${TASK_SELECT}
-       where t.organization_id = $1
-         and ($2::uuid is null or t.farm_id = $2::uuid)
-         and ($3::uuid is null or t.plot_id = $3::uuid)
-         and ($4::uuid is null or t.assigned_worker_id = $4::uuid)
-         and ($5::text is null or t.status = $5::text)
-         and ($6::boolean is not true or t.status in ('pending','assigned','in_progress','blocked'))
-       order by
-         case t.priority when 'urgent' then 0 when 'high' then 1 when 'medium' then 2 else 3 end,
-         t.due_date asc nulls last,
-         t.created_at desc
-       limit $7`,
-      [
-        organizationId,
-        opts.farmId ?? null,
-        opts.plotId ?? null,
-        opts.assignedWorkerId ?? null,
-        opts.status ?? null,
-        opts.openOnly ?? false,
-        limit,
-      ],
-    );
+    const rows = await db`
+      select t.*, p.code as plot_code, w.full_name as assigned_worker_name
+      from public.tasks t
+      left join public.plots p on p.id = t.plot_id
+      left join public.workers w on w.id = t.assigned_worker_id
+      where t.organization_id = ${organizationId}
+        and (${opts.farmId}::uuid is null or t.farm_id = ${opts.farmId}::uuid)
+        and (${opts.plotId}::uuid is null or t.plot_id = ${opts.plotId}::uuid)
+        and (${opts.assignedWorkerId}::uuid is null or t.assigned_worker_id = ${opts.assignedWorkerId}::uuid)
+        and (${opts.status}::text is null or t.status = ${opts.status}::text)
+        and (${opts.openOnly}::boolean is not true or t.status in ('pending','assigned','in_progress','blocked'))
+      order by
+        case t.priority when 'urgent' then 0 when 'high' then 1 when 'medium' then 2 else 3 end,
+        t.due_date asc nulls last,
+        t.created_at desc
+      limit ${limit}
+    `;
     return rows.map(toTask);
   });
 }
 
 export async function getTask(userId: string, taskId: string): Promise<Task | null> {
   return withUser(userId, async (db) => {
-    const rows = await db.unsafe(`${TASK_SELECT} where t.id = $1`, [taskId]);
+    const rows = await db`
+      select t.*, p.code as plot_code, w.full_name as assigned_worker_name
+      from public.tasks t
+      left join public.plots p on p.id = t.plot_id
+      left join public.workers w on w.id = t.assigned_worker_id
+      where t.id = ${taskId}
+    `;
     return rows[0] ? toTask(rows[0]) : null;
   });
 }

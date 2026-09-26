@@ -6,7 +6,7 @@
 -- ---------------------------------------------------------------------
 -- Seasons
 -- ---------------------------------------------------------------------
-create table public.seasons (
+create table if not exists public.seasons (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   name text not null check (length(btrim(name)) between 1 and 80),
@@ -18,16 +18,18 @@ create table public.seasons (
   updated_at timestamptz not null default now(),
   unique (organization_id, name)
 );
+drop trigger if exists seasons_touch on public.seasons;
 create trigger seasons_touch before update on public.seasons
   for each row execute function public.touch_updated_at();
+drop trigger if exists seasons_created_by on public.seasons;
 create trigger seasons_created_by before insert on public.seasons
   for each row execute function public.set_created_by();
-create index seasons_org_idx on public.seasons (organization_id, start_date desc);
+create index if not exists seasons_org_idx on public.seasons (organization_id, start_date desc);
 
 -- ---------------------------------------------------------------------
 -- Crops & Varieties (reference data seeded in 0002)
 -- ---------------------------------------------------------------------
-create table public.crops (
+create table if not exists public.crops (
   id uuid primary key default gen_random_uuid(),
   code text not null unique check (code ~ '^[a-z0-9_]{2,40}$'),
   name text not null,
@@ -38,7 +40,7 @@ create table public.crops (
   created_at timestamptz not null default now()
 );
 
-create table public.crop_varieties (
+create table if not exists public.crop_varieties (
   id uuid primary key default gen_random_uuid(),
   crop_id uuid not null references public.crops(id) on delete cascade,
   name text not null,
@@ -49,12 +51,12 @@ create table public.crop_varieties (
   created_at timestamptz not null default now(),
   unique (crop_id, code)
 );
-create index crop_varieties_crop_idx on public.crop_varieties (crop_id);
+create index if not exists crop_varieties_crop_idx on public.crop_varieties (crop_id);
 
 -- ---------------------------------------------------------------------
 -- Crop Seasons (a crop planted in a specific season on a farm)
 -- ---------------------------------------------------------------------
-create table public.crop_seasons (
+create table if not exists public.crop_seasons (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   farm_id uuid not null references public.farms(id) on delete cascade,
@@ -77,18 +79,20 @@ create table public.crop_seasons (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+drop trigger if exists crop_seasons_touch on public.crop_seasons;
 create trigger crop_seasons_touch before update on public.crop_seasons
   for each row execute function public.touch_updated_at();
+drop trigger if exists crop_seasons_created_by on public.crop_seasons;
 create trigger crop_seasons_created_by before insert on public.crop_seasons
   for each row execute function public.set_created_by();
-create index crop_seasons_farm_idx on public.crop_seasons (farm_id, season_id);
-create index crop_seasons_plot_idx on public.crop_seasons (plot_id);
-create index crop_seasons_crop_idx on public.crop_seasons (crop_id);
+create index if not exists crop_seasons_farm_idx on public.crop_seasons (farm_id, season_id);
+create index if not exists crop_seasons_plot_idx on public.crop_seasons (plot_id);
+create index if not exists crop_seasons_crop_idx on public.crop_seasons (crop_id);
 
 -- ---------------------------------------------------------------------
 -- Crop Activities (field operations)
 -- ---------------------------------------------------------------------
-create table public.crop_activities (
+create table if not exists public.crop_activities (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   crop_season_id uuid not null references public.crop_seasons(id) on delete cascade,
@@ -110,17 +114,19 @@ create table public.crop_activities (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+drop trigger if exists crop_activities_touch on public.crop_activities;
 create trigger crop_activities_touch before update on public.crop_activities
   for each row execute function public.touch_updated_at();
+drop trigger if exists crop_activities_created_by on public.crop_activities;
 create trigger crop_activities_created_by before insert on public.crop_activities
   for each row execute function public.set_created_by();
-create index crop_activities_cs_idx on public.crop_activities (crop_season_id, activity_date);
-create index crop_activities_type_idx on public.crop_activities (activity_type);
+create index if not exists crop_activities_cs_idx on public.crop_activities (crop_season_id, activity_date);
+create index if not exists crop_activities_type_idx on public.crop_activities (activity_type);
 
 -- ---------------------------------------------------------------------
 -- Crop Inputs (materials consumed by activities)
 -- ---------------------------------------------------------------------
-create table public.crop_inputs (
+create table if not exists public.crop_inputs (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   crop_season_id uuid not null references public.crop_seasons(id) on delete cascade,
@@ -141,15 +147,16 @@ create table public.crop_inputs (
   created_by uuid references public.profiles(id),
   created_at timestamptz not null default now()
 );
+drop trigger if exists crop_inputs_created_by on public.crop_inputs;
 create trigger crop_inputs_created_by before insert on public.crop_inputs
   for each row execute function public.set_created_by();
-create index crop_inputs_cs_idx on public.crop_inputs (crop_season_id);
-create index crop_inputs_item_idx on public.crop_inputs (inventory_item_id);
+create index if not exists crop_inputs_cs_idx on public.crop_inputs (crop_season_id);
+create index if not exists crop_inputs_item_idx on public.crop_inputs (inventory_item_id);
 
 -- ---------------------------------------------------------------------
 -- Harvests
 -- ---------------------------------------------------------------------
-create table public.harvests (
+create table if not exists public.harvests (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   crop_season_id uuid not null references public.crop_seasons(id) on delete cascade,
@@ -164,16 +171,18 @@ create table public.harvests (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+drop trigger if exists harvests_touch on public.harvests;
 create trigger harvests_touch before update on public.harvests
   for each row execute function public.touch_updated_at();
+drop trigger if exists harvests_created_by on public.harvests;
 create trigger harvests_created_by before insert on public.harvests
   for each row execute function public.set_created_by();
-create index harvests_cs_idx on public.harvests (crop_season_id, harvest_date);
+create index if not exists harvests_cs_idx on public.harvests (crop_season_id, harvest_date);
 
 -- ---------------------------------------------------------------------
 -- Livestock Species (reference data seeded in 0002)
 -- ---------------------------------------------------------------------
-create table public.livestock_species (
+create table if not exists public.livestock_species (
   id uuid primary key default gen_random_uuid(),
   code text not null unique check (code ~ '^[a-z0-9_]{2,40}$'),
   name text not null,
@@ -185,7 +194,7 @@ create table public.livestock_species (
 -- ---------------------------------------------------------------------
 -- Livestock Groups (e.g., "Broilers", "Layers", "Dairy Cattle")
 -- ---------------------------------------------------------------------
-create table public.livestock_groups (
+create table if not exists public.livestock_groups (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   species_id uuid not null references public.livestock_species(id) on delete restrict,
@@ -196,15 +205,17 @@ create table public.livestock_groups (
   updated_at timestamptz not null default now(),
   unique (organization_id, name)
 );
+drop trigger if exists livestock_groups_touch on public.livestock_groups;
 create trigger livestock_groups_touch before update on public.livestock_groups
   for each row execute function public.touch_updated_at();
+drop trigger if exists livestock_groups_created_by on public.livestock_groups;
 create trigger livestock_groups_created_by before insert on public.livestock_groups
   for each row execute function public.set_created_by();
 
 -- ---------------------------------------------------------------------
 -- Livestock Batches (a cohort of animals)
 -- ---------------------------------------------------------------------
-create table public.livestock_batches (
+create table if not exists public.livestock_batches (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   farm_id uuid not null references public.farms(id) on delete cascade,
@@ -226,17 +237,19 @@ create table public.livestock_batches (
   updated_at timestamptz not null default now(),
   unique (organization_id, batch_code)
 );
+drop trigger if exists livestock_batches_touch on public.livestock_batches;
 create trigger livestock_batches_touch before update on public.livestock_batches
   for each row execute function public.touch_updated_at();
+drop trigger if exists livestock_batches_created_by on public.livestock_batches;
 create trigger livestock_batches_created_by before insert on public.livestock_batches
   for each row execute function public.set_created_by();
-create index livestock_batches_farm_idx on public.livestock_batches (farm_id, status);
-create index livestock_batches_group_idx on public.livestock_batches (group_id);
+create index if not exists livestock_batches_farm_idx on public.livestock_batches (farm_id, status);
+create index if not exists livestock_batches_group_idx on public.livestock_batches (group_id);
 
 -- ---------------------------------------------------------------------
 -- Livestock Events (mortality, movement, vaccination, treatment, weighing, sale)
 -- ---------------------------------------------------------------------
-create table public.livestock_events (
+create table if not exists public.livestock_events (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   batch_id uuid not null references public.livestock_batches(id) on delete cascade,
@@ -257,10 +270,11 @@ create table public.livestock_events (
   created_by uuid references public.profiles(id),
   created_at timestamptz not null default now()
 );
+drop trigger if exists livestock_events_created_by on public.livestock_events;
 create trigger livestock_events_created_by before insert on public.livestock_events
   for each row execute function public.set_created_by();
-create index livestock_events_batch_idx on public.livestock_events (batch_id, event_date);
-create index livestock_events_type_idx on public.livestock_events (event_type);
+create index if not exists livestock_events_batch_idx on public.livestock_events (batch_id, event_date);
+create index if not exists livestock_events_type_idx on public.livestock_events (event_type);
 
 -- ---------------------------------------------------------------------
 -- Livestock Health (detailed health records)
