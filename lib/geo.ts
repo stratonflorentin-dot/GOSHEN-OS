@@ -19,6 +19,32 @@ export function pathLengthM(points: [number, number][]): number {
   return total;
 }
 
+/** Ray-casting test for [latitude, longitude] rings, including GPS points on edges. */
+export function pointInPolygon(
+  point: [number, number],
+  ring: [number, number][],
+): boolean {
+  if (ring.length < 3) return false;
+  const [lat, lng] = point;
+  let inside = false;
+
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [latA, lngA] = ring[j];
+    const [latB, lngB] = ring[i];
+    const cross = (lng - lngA) * (latB - latA) - (lat - latA) * (lngB - lngA);
+    const onSegment = Math.abs(cross) < 1e-10 &&
+      lng >= Math.min(lngA, lngB) - 1e-10 && lng <= Math.max(lngA, lngB) + 1e-10 &&
+      lat >= Math.min(latA, latB) - 1e-10 && lat <= Math.max(latA, latB) + 1e-10;
+    if (onSegment) return true;
+
+    const crossesRay = (latA > lat) !== (latB > lat) &&
+      lng < ((lngB - lngA) * (lat - latA)) / (latB - latA) + lngA;
+    if (crossesRay) inside = !inside;
+  }
+
+  return inside;
+}
+
 /**
  * Approximate geodesic polygon area in m² via a local-equirectangular
  * projection around the ring centroid. Good for phone-GPS sized polygons;

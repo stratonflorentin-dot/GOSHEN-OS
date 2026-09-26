@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth/client";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 type NavItem = { href: string; label: string; icon: LucideIcon; phase?: number };
 
@@ -188,6 +189,7 @@ export function Shell({
             {/* Org selector (mobile) */}
             {orgName && <div title={orgName} className="hidden max-w-[180px] rounded-lg bg-[#f4f7f3] px-2.5 py-1.5 text-xs font-medium text-muted-foreground sm:block lg:hidden"><span className="block truncate">{orgName}</span></div>}
 
+            <ThemeToggle />
             <button onClick={signOut} aria-label="Sign out" title="Sign out" className="grid h-9 w-9 place-items-center rounded-full bg-primary-100 text-sm font-semibold text-primary-700 hover:bg-primary-200 lg:hidden">
               {(userName || "U").slice(0, 1).toUpperCase()}
             </button>

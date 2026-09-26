@@ -20,7 +20,11 @@ export async function createOrganizationAction(formData: FormData) {
     redirect(`/onboarding?error=${encodeURIComponent(msg)}`);
   }
 
-  await createOrganization(user.id, parsed.data);
+  try {
+    await createOrganization(user.id, parsed.data);
+  } catch {
+    redirect("/onboarding?error=We%20couldn%E2%80%99t%20create%20your%20organization.%20Check%20the%20details%20and%20try%20again.");
+  }
   revalidatePath("/dashboard", "layout");
   redirect("/farms/new");
 }

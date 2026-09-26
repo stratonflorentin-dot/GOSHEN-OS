@@ -3,13 +3,27 @@
 @tailwind utilities;
 
 :root {
-  --background: #f4f7f3;
-  --foreground: #1c2921;
-  --card: #ffffff;
+  color-scheme: light;
+  --background: 100 25% 97%;
+  --foreground: 143 18% 14%;
+  --card: 0 0% 100%;
+  --card-foreground: 143 18% 14%;
   --border: 145 14% 89%;
-  --muted: #f0f4ef;
-  --muted-foreground: #6d7b71;
-  --sidebar: #ffffff;
+  --muted: 110 19% 95%;
+  --muted-foreground: 142 6% 46%;
+  --sidebar: 0 0% 100%;
+}
+
+html.dark {
+  color-scheme: dark;
+  --background: 148 24% 8%;
+  --foreground: 135 17% 91%;
+  --card: 148 20% 12%;
+  --card-foreground: 135 17% 91%;
+  --border: 145 13% 23%;
+  --muted: 148 17% 16%;
+  --muted-foreground: 140 9% 66%;
+  --sidebar: 148 20% 11%;
 }
 
 @layer base {
@@ -22,7 +36,7 @@
   }
   body {
     @apply text-foreground antialiased;
-    background: var(--background);
+    background: hsl(var(--background));
     font-feature-settings: "cv11", "ss01";
     text-rendering: optimizeLegibility;
   }
@@ -37,13 +51,13 @@
 
 @layer components {
   .card {
-    @apply rounded-2xl border border-[#e5ebe4] bg-white shadow-[0_2px_8px_rgba(25,48,31,0.035)];
+    @apply rounded-2xl border border-border bg-card text-card-foreground shadow-[0_2px_8px_rgba(25,48,31,0.035)];
   }
   .field-label {
-    @apply mb-1.5 block text-[13px] font-semibold text-[#33443a];
+    @apply mb-1.5 block text-[13px] font-semibold text-foreground;
   }
   .field-input {
-    @apply w-full rounded-xl border border-[#dfe7df] bg-white px-3.5 py-2.5 text-sm outline-none transition
+    @apply w-full rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm text-foreground outline-none transition
       placeholder:text-muted-foreground/60
       focus:border-[#47865b] focus:ring-4 focus:ring-primary/10;
   }
@@ -51,6 +65,18 @@
     @apply text-[26px] font-semibold tracking-tight text-[#1d3024];
   }
 }
+
+html.dark body { background: hsl(var(--background)); }
+html.dark .bg-white { background-color: hsl(var(--card)); }
+html.dark [class*="bg-white/"] { background-color: hsl(var(--card) / 0.92); }
+html.dark [class*="border-[#"] { border-color: hsl(var(--border)); }
+html.dark [class*="text-[#"] { color: hsl(var(--foreground)); }
+html.dark [class~="bg-[#f5f8f4]"],
+html.dark [class~="bg-[#f4f7f3]"],
+html.dark [class~="bg-[#f2f6f1]"],
+html.dark [class~="bg-[#fcfdfb]"],
+html.dark [class~="bg-[#f3f7f1]"],
+html.dark [class~="bg-[#fafffa]"] { background-color: hsl(var(--muted)); }
 
 ::selection {
   background: #d6eadb;

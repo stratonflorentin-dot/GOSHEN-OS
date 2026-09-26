@@ -42,8 +42,8 @@ export async function createOrganization(
 ): Promise<Organization> {
   return withUser(userId, async (db) => {
     const rows = await db`
-      select public.create_organization(${input.name}, ${input.country}::char,
-                                        ${input.currency}::char, ${input.timezone}) as id
+      select public.create_organization(${input.name}, ${input.country},
+                                        ${input.currency}, ${input.timezone}) as id
     `;
     const id = rows[0].id as string;
     const org = await db`select * from public.organizations where id = ${id}`;

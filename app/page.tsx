@@ -14,6 +14,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { getSessionUser } from "@/lib/auth/server";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 const modules = [
   { icon: MapPinned, title: "Land & GIS", detail: "Farms, boundaries, plots, and field maps" },
@@ -38,6 +39,7 @@ export default async function HomePage() {
           <span className="text-sm font-bold tracking-[.14em]">GOSHEN <span className="font-medium tracking-normal text-[#758279]">OS</span></span>
         </Link>
         <nav className="flex items-center gap-2" aria-label="Account">
+          <ThemeToggle />
           <Link href="/login" className="rounded-lg px-3.5 py-2.5 text-sm font-medium text-[#536359] hover:bg-white">Sign in</Link>
           <Link href="/register" className="rounded-lg bg-[#174c35] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#103e2a]">Create account</Link>
         </nav>

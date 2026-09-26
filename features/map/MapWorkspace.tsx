@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { MapPinned, Layers, Eye, EyeOff } from "lucide-react";
+import { MapPinned, Layers, Eye, EyeOff, LocateFixed, Radio, RadioTower } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { MapPolygon } from "./LeafletMap";
+import { pointInPolygon } from "@/lib/geo";
+import type { MapLocation, MapPolygon } from "./LeafletMap";
 
 const LeafletMap = dynamic(() => import("./LeafletMap"), {
   ssr: false,
@@ -20,21 +21,90 @@ type LayerKey = "farm" | "plots";
 
 const LAYERS: { key: LayerKey; label: string; ready: boolean; phase?: number }[] = [
   { key: "farm", label: "Farm boundaries", ready: true },
-  { key: "plots", label: "Plots", ready: false, phase: 2 },
+  { key: "plots", label: "Plot boundaries", ready: true },
 ];
 
 export function MapWorkspace({
   farmName,
   polygons,
+  plotPolygons,
   pendingNote,
 }: {
   farmName: string;
   polygons: MapPolygon[];
+  plotPolygons: MapPolygon[];
   pendingNote?: string;
 }) {
   const [visible, setVisible] = useState<Record<LayerKey, boolean>>({ farm: true, plots: false });
   const [selected, setSelected] = useState<string | null>(null);
-  const selectedPolygon = polygons.find((p) => p.id === selected) ?? null;
+  const [location, setLocation] = useState<MapLocation>();
+  const [tracking, setTracking] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+  const [transition, setTransition] = useState<string | null>(null);
+  const watchId = useRef<number | null>(null);
+  const lastFence = useRef<string | null | undefined>(undefined);
+  const displayedPolygons = [
+    ...(visible.farm ? polygons : []),
+    ...(visible.plots ? plotPolygons : []),
+  ];
+  const selectedPolygon = displayedPolygons.find((p) => p.id === selected) ?? null;
+  const currentFence = location
+    ? polygons.find((polygon) => pointInPolygon(location.point, polygon.ring)) ?? null
+    : null;
+
+  useEffect(() => () => {
+    if (watchId.current !== null && "geolocation" in navigator) {
+      navigator.geolocation.clearWatch(watchId.current);
+    }
+  }, []);
+
+  function toggleGeofence() {
+    if (watchId.current !== null) {
+      navigator.geolocation.clearWatch(watchId.current);
+      watchId.current = null;
+      setTracking(false);
+      setTransition(null);
+      lastFence.current = undefined;
+      return;
+    }
+    if (!navigator.geolocation) {
+      setGpsError("Location is unavailable in this browser.");
+      return;
+    }
+
+    setGpsError(null);
+    setTransition(null);
+    lastFence.current = undefined;
+    setTracking(true);
+    watchId.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const nextLocation: MapLocation = {
+          point: [position.coords.latitude, position.coords.longitude],
+          accuracy: position.coords.accuracy,
+        };
+        const fence = polygons.find((polygon) => pointInPolygon(nextLocation.point, polygon.ring)) ?? null;
+        const previousId = lastFence.current;
+        if (previousId !== undefined && previousId !== (fence?.id ?? null)) {
+          setTransition(fence ? `Entered ${fence.name}` : "Outside recorded farm boundaries");
+          navigator.vibrate?.(80);
+        }
+        lastFence.current = fence?.id ?? null;
+        setLocation(nextLocation);
+      },
+      (error) => {
+        watchId.current = null;
+        setTracking(false);
+        setGpsError(
+          error.code === error.PERMISSION_DENIED
+            ? "Allow location access in your browser to use geofencing."
+            : error.code === error.TIMEOUT
+              ? "GPS is taking too long. Move to an open area and try again."
+              : "Could not read your location. Check your device location settings.",
+        );
+      },
+      { enableHighAccuracy: true, maximumAge: 5_000, timeout: 20_000 },
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -43,13 +113,40 @@ export function MapWorkspace({
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Farm Map</h1>
           <p className="text-sm text-muted-foreground">{farmName}</p>
         </div>
-        <Link
-          href="/farms/new"
-          className="hidden items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-600 sm:inline-flex"
-        >
-          <MapPinned className="h-4 w-4" /> Record boundary
-        </Link>
+        <div className="flex flex-wrap justify-end gap-2">
+          {polygons.length > 0 && (
+            <button
+              type="button"
+              onClick={toggleGeofence}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-medium text-foreground hover:bg-muted",
+                tracking && "border-primary bg-primary-50 text-primary-800 dark:bg-primary-800 dark:text-white",
+              )}
+              aria-pressed={tracking}
+            >
+              {tracking ? <RadioTower className="h-4 w-4" /> : <LocateFixed className="h-4 w-4" />}
+              {tracking ? "Stop geofence" : "Start geofence"}
+            </button>
+          )}
+          <Link href="/farms/new" className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2.5 text-sm font-medium text-white hover:bg-primary-600 sm:px-4">
+            <MapPinned className="h-4 w-4" /> Record boundary
+          </Link>
+        </div>
       </div>
+
+      {(tracking || gpsError || transition) && (
+        <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-border bg-card px-4 py-3 text-sm">
+          {tracking && <Radio className={cn("h-4 w-4", currentFence ? "text-emerald-600" : "text-amber-600")} />}
+          <span className="font-medium">
+            {gpsError ?? (location
+              ? currentFence ? `Inside ${currentFence.name}` : "Outside recorded farm boundaries"
+              : "Waiting for GPS fix…")}
+          </span>
+          {location && <span className="text-xs text-muted-foreground">Accuracy ±{Math.round(location.accuracy)} m</span>}
+          {transition && <span className="text-xs text-muted-foreground">{transition}</span>}
+          <span className="text-xs text-muted-foreground">Geofencing runs while this page is open.</span>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
         {/* Layers panel */}
@@ -93,11 +190,12 @@ export function MapWorkspace({
         {/* Map */}
         <div className="card overflow-hidden p-0">
           <div className="h-[420px] w-full sm:h-[560px]">
-            {polygons.length > 0 && visible.farm ? (
+            {displayedPolygons.length > 0 ? (
               <LeafletMap
-                polygons={polygons}
+                polygons={displayedPolygons}
                 selectedId={selected}
                 onSelect={setSelected}
+                currentLocation={location}
                 className="h-full w-full"
               />
             ) : (
