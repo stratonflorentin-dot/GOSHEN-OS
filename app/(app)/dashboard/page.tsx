@@ -1,185 +1,103 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import {
-  LandPlot,
-  Sprout,
-  Beef,
-  TrendingUp,
-  ChevronRight,
-  CircleCheck,
-  TriangleAlert,
-} from "lucide-react";
+import { ArrowRight, Beef, Boxes, Cloud, Coins, Map, MapPinned, Plus, Sprout, Wallet } from "lucide-react";
 import { getSessionUser } from "@/lib/auth/server";
 import { listMemberships } from "@/services/orgService";
 import { listFarmGeo, type FarmGeo } from "@/services/farmService";
+import { getFarmKpis } from "@/services/analyticsService";
 import { formatHa } from "@/lib/format";
 import type { MapPolygon } from "@/features/map/MapLibreMap";
 import { MiniMap } from "@/features/map/MiniMap";
 
-function greet(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
-}
-
 function toPolygons(farms: FarmGeo[]): MapPolygon[] {
-  return farms
-    .filter((f) => f.boundaryGeoJson)
-    .map((f) => {
-      const geom = JSON.parse(f.boundaryGeoJson!) as {
-        coordinates: [number, number][][];
-      };
-      const ring = geom.coordinates[0].map(
-        ([lng, lat]) => [lat, lng] as [number, number],
-      );
-      return { id: f.farmId, name: f.name, ring };
-    });
+  return farms.flatMap((farm) => {
+    if (!farm.boundaryGeoJson) return [];
+    try {
+      const geom = JSON.parse(farm.boundaryGeoJson) as { coordinates: [number, number][][] };
+      return [{ id: farm.farmId, name: farm.name, ring: geom.coordinates[0].map(([lng, lat]) => [lat, lng] as [number, number]) }];
+    } catch { return []; }
+  });
 }
 
-function Kpi({
-  icon: Icon,
-  value,
-  label,
-  pending,
-  href,
-}: {
-  icon: typeof LandPlot;
-  value: string;
-  label: string;
-  pending?: boolean;
-  href?: string;
-}) {
-  const body = (
-    <div className="card flex items-center gap-3.5 p-4.5 p-4">
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary-50 text-primary-700">
-        <Icon className="h-5 w-5" />
-      </span>
-      <div className="min-w-0">
-        <div className={pending ? "text-lg font-semibold text-muted-foreground/50" : "stat-value"}>
-          {value}
-        </div>
-        <div className="truncate text-xs text-muted-foreground">{label}</div>
-      </div>
-    </div>
-  );
-  return href ? <Link href={href}>{body}</Link> : body;
+function Metric({ label, value, note, href }: { label: string; value: string; note: string; href: string }) {
+  return <Link href={href} className="group block border-l-2 border-border pl-3 transition hover:border-primary">
+    <p className="text-xs font-medium text-muted-foreground">{label}</p>
+    <p className="mt-1 text-[22px] font-semibold tabular-nums tracking-tight">{value}</p>
+    <p className="mt-0.5 text-[11px] text-muted-foreground group-hover:text-primary">{note}</p>
+  </Link>;
 }
+
+const actions = [
+  { label: "Create farm", href: "/farms/new", icon: MapPinned },
+  { label: "Map a plot", href: "/plots/new", icon: Map },
+  { label: "Plan crops", href: "/crops/plan", icon: Sprout },
+  { label: "Add livestock", href: "/livestock/new", icon: Beef },
+  { label: "Add inventory", href: "/inventory/new", icon: Boxes },
+  { label: "Record expense", href: "/finance/journal/new", icon: Wallet },
+];
 
 export default async function DashboardPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
-
   const memberships = await listMemberships(user.id);
-  if (memberships.length === 0) redirect("/onboarding");
-
+  if (!memberships.length) redirect("/onboarding");
   const org = memberships[0].organization;
   const farms = await listFarmGeo(user.id, org.id);
+  const farmKpis = await Promise.all(farms.map((farm) => getFarmKpis(user.id, farm.farmId)));
   const polygons = toPolygons(farms);
-  const landM2 = farms.reduce((sum, f) => sum + Number(f.areaM2 ?? 0), 0);
+  const landM2 = farms.reduce((sum, farm) => sum + Number(farm.areaM2 ?? 0), 0);
+  const mapped = farms.filter((farm) => farm.boundaryGeoJson).length;
+  const totals = farmKpis.reduce((sum, kpi) => ({
+    hectares: sum.hectares + kpi.totalPlantedHectares,
+    crops: sum.crops + kpi.activeCropSeasons,
+    batches: sum.batches + kpi.activeBatches,
+    revenue: sum.revenue + kpi.totalRevenue,
+    expenses: sum.expenses + kpi.totalExpenses,
+    profit: sum.profit + kpi.netProfit,
+  }), { hectares: 0, crops: 0, batches: 0, revenue: 0, expenses: 0, profit: 0 });
+  const money = (amount: number) => new Intl.NumberFormat("en-TZ", {
+    style: "currency", currency: org.defaultCurrency, notation: "compact", maximumFractionDigits: 1,
+  }).format(amount);
+  const greeting = new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(new Date());
 
-  return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-          {greet()}, {user.name || "Farmer"}
-        </h1>
-        <p className="text-sm text-muted-foreground">{org.name}</p>
-      </div>
-
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <Kpi icon={LandPlot} value={landM2 > 0 ? formatHa(landM2) : "—"} label="Land" href="/farms" />
-        <Kpi icon={Sprout} value="—" label="Crops active (Phase 3)" pending />
-        <Kpi icon={Beef} value="—" label="Livestock (Phase 3)" pending />
-        <Kpi icon={TrendingUp} value="—" label="Profit (Phase 5)" pending />
-      </div>
-
-      {/* Farm map + weather */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="card p-5 lg:col-span-2">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Farm Map
-            </h2>
-            <Link href="/farms" className="text-xs font-medium text-primary-700 hover:underline">
-              View farms
-            </Link>
-          </div>
-          <MiniMap polygons={polygons} />
-        </div>
-
-        <div className="card p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Farm weather</h2>
-            <Link href="/weather" className="text-xs font-medium text-primary-700 hover:underline">View forecasts</Link>
-          </div>
-          <p className="mb-3 text-xs text-muted-foreground">Local conditions are matched to each farm’s saved boundary coordinates.</p>
-          <div className="space-y-2">
-            {farms.slice(0, 4).map((farm) => (
-              <Link key={farm.farmId} href={`/weather?farmId=${farm.farmId}`} className="flex items-center justify-between gap-2 rounded-lg border border-border/60 p-2.5 transition hover:border-primary">
-                <span className="min-w-0 truncate text-sm font-medium">{farm.name}</span>
-                <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
-                  {farm.centroidLat !== null && farm.centroidLng !== null
-                    ? `${farm.centroidLat.toFixed(3)}, ${farm.centroidLng.toFixed(3)}`
-                    : "Add boundary"}
-                </span>
-              </Link>
-            ))}
-            {farms.length === 0 && <p className="text-sm text-muted-foreground">Create a farm and record its boundary to enable local weather.</p>}
-          </div>
-        </div>
-      </div>
-
-      {/* Revenue vs cost + activities */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="card p-5 lg:col-span-2">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Revenue vs Cost
-          </h2>
-          <div className="grid h-48 place-items-center text-center">
-            <div>
-              <TrendingUp className="mx-auto h-8 w-8 text-muted-foreground/40" />
-              <p className="mt-2 text-sm text-muted-foreground">
-                Financial data arrives with finance (Phase 5)
-              </p>
-              <p className="text-xs text-muted-foreground/70">
-                Income, expenses, and profitability will chart here.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="card p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Farm Activities
-          </h2>
-          <div className="space-y-3 text-sm">
-            <p className="flex items-center gap-2 text-muted-foreground">
-              <CircleCheck className="h-4 w-4 text-success" />
-              {farms.length > 0
-                ? `${farms.length} farm${farms.length === 1 ? "" : "s"} recorded`
-                : "No activity yet"}
-            </p>
-            {farms.length === 0 && (
-              <Link
-                href="/farms/new"
-                className="inline-flex items-center gap-1 font-medium text-primary-700 hover:underline"
-              >
-                Record your first farm boundary <ChevronRight className="h-3.5 w-3.5" />
-              </Link>
-            )}
-            <p className="flex items-center gap-2 text-muted-foreground">
-              <TriangleAlert className="h-4 w-4 text-warning" />
-              Crop activities arrive in Phase 3
-            </p>
-            <p className="flex items-center gap-2 text-muted-foreground">
-              <TriangleAlert className="h-4 w-4 text-warning" />
-              Low-inventory alerts arrive in Phase 4
-            </p>
-          </div>
-        </div>
-      </div>
+  return <div className="mx-auto max-w-[1440px] space-y-6">
+    <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <div><p className="eyebrow">{org.name} <span className="px-1.5">/</span> Operations</p><h1 className="page-title mt-1.5">Overview</h1><p className="mt-1 text-sm text-muted-foreground">A current view of your farm portfolio and field locations.</p></div>
+      <div className="flex flex-wrap items-center gap-2"><span className="mr-1 text-xs text-muted-foreground">{greeting}</span><Link href="/map" className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium hover:bg-muted"><Map className="h-4 w-4" />Open map</Link><Link href="/farms/new" className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-white hover:bg-primary-700"><Plus className="h-4 w-4" />Create farm</Link></div>
     </div>
-  );
+
+    <section aria-label="Operational indicators" className="grid grid-cols-2 gap-x-4 gap-y-5 border-b border-border pb-5 sm:grid-cols-3 lg:grid-cols-6 lg:gap-0">
+      <Metric label="Active farms" value={String(farms.length)} note="Farm portfolio" href="/farms" />
+      <Metric label="Mapped area" value={landM2 > 0 ? formatHa(landM2) : "—"} note={`${mapped} of ${farms.length} mapped`} href="/map" />
+      <Metric label="Active crop seasons" value={String(totals.crops)} note={`${totals.hectares.toLocaleString("en-TZ", { maximumFractionDigits: 1 })} ha planted`} href="/crops" />
+      <Metric label="Livestock batches" value={String(totals.batches)} note="Active batches" href="/livestock" />
+      <Metric label="Revenue · 12 months" value={money(totals.revenue)} note="Posted farm transactions" href="/finance" />
+      <Metric label="Profit · 12 months" value={money(totals.profit)} note={`${money(totals.expenses)} expenses`} href="/analytics" />
+    </section>
+
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,.8fr)]">
+      <section className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3.5 sm:px-5"><div><h2 className="section-title">Farm locations</h2><p className="mt-0.5 text-xs text-muted-foreground">Satellite view of recorded boundaries</p></div><Link href="/map" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">GIS workspace <ArrowRight className="h-3.5 w-3.5" /></Link></div>
+        <div className="p-2 sm:p-3"><MiniMap polygons={polygons} /></div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2.5 text-xs text-muted-foreground"><span>{mapped} boundary{mapped === 1 ? "" : "ies"} on map</span><Link href="/farms" className="font-medium text-foreground hover:text-primary">Manage farms</Link></div>
+      </section>
+      <section className="rounded-lg border border-border bg-card">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3.5"><div><h2 className="section-title">Weather by farm</h2><p className="mt-0.5 text-xs text-muted-foreground">Saved boundary center coordinates</p></div><Cloud className="h-4 w-4 text-muted-foreground" /></div>
+        {farms.length ? <div className="divide-y divide-border">{farms.slice(0, 6).map((farm) => <Link key={farm.farmId} href={`/weather?farmId=${farm.farmId}`} className="flex min-h-[58px] items-center justify-between gap-3 px-4 py-2.5 hover:bg-muted/50"><span className="min-w-0"><span className="block truncate text-sm font-medium">{farm.name}</span><span className="mt-0.5 block font-mono text-[11px] text-muted-foreground">{farm.centroidLat !== null && farm.centroidLng !== null ? `${farm.centroidLat.toFixed(4)}, ${farm.centroidLng.toFixed(4)}` : "Coordinates not available"}</span></span><ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" /></Link>)}</div> : <div className="px-4 py-8 text-center"><p className="text-sm font-medium">No farm locations</p><p className="mt-1 text-xs text-muted-foreground">Create a farm and record its boundary to see coordinates and local weather.</p><Link href="/farms/new" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary">Create farm <ArrowRight className="h-3.5 w-3.5" /></Link></div>}
+        {farms.length > 6 && <Link href="/weather" className="block border-t border-border px-4 py-2.5 text-xs font-medium text-primary hover:bg-muted/50">View all {farms.length} farm forecasts</Link>}
+      </section>
+    </div>
+
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,.7fr)]">
+      <section className="rounded-lg border border-border bg-card">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3.5"><div><h2 className="section-title">Production & finance</h2><p className="mt-0.5 text-xs text-muted-foreground">Live records from your organization</p></div><Coins className="h-4 w-4 text-muted-foreground" /></div>
+        <div className="grid grid-cols-2 divide-x divide-border sm:grid-cols-4"><Link href="/crops" className="p-4 hover:bg-muted/50"><Sprout className="h-4 w-4 text-muted-foreground" /><p className="mt-3 text-sm font-medium">Crop plans</p><p className="mt-1 text-xs text-muted-foreground">View crop activity</p></Link><Link href="/livestock" className="p-4 hover:bg-muted/50"><Beef className="h-4 w-4 text-muted-foreground" /><p className="mt-3 text-sm font-medium">Livestock</p><p className="mt-1 text-xs text-muted-foreground">View herd records</p></Link><Link href="/inventory" className="p-4 hover:bg-muted/50"><Boxes className="h-4 w-4 text-muted-foreground" /><p className="mt-3 text-sm font-medium">Inventory</p><p className="mt-1 text-xs text-muted-foreground">Review stock</p></Link><Link href="/finance" className="p-4 hover:bg-muted/50"><Wallet className="h-4 w-4 text-muted-foreground" /><p className="mt-3 text-sm font-medium">Finance</p><p className="mt-1 text-xs text-muted-foreground">Review transactions</p></Link></div>
+        <p className="border-t border-border px-4 py-2.5 text-xs text-muted-foreground">Financial and production totals appear when records are available.</p>
+      </section>
+      <section className="rounded-lg border border-border bg-card">
+        <div className="border-b border-border px-4 py-3.5"><h2 className="section-title">Create a record</h2><p className="mt-0.5 text-xs text-muted-foreground">Start a common farm workflow</p></div>
+        <div className="grid grid-cols-2 gap-2 p-3">{actions.map(({ label, href, icon: Icon }) => <Link key={href} href={href} className="flex min-h-10 items-center gap-2 rounded-md border border-border px-2.5 text-xs font-medium hover:border-primary/50 hover:bg-muted/50"><Icon className="h-4 w-4 shrink-0 text-muted-foreground" /><span className="truncate">{label}</span></Link>)}</div>
+      </section>
+    </div>
+  </div>;
 }

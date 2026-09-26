@@ -45,7 +45,7 @@ export default async function MapPage() {
 
   return (
     <MapWorkspace
-      farmName={org.name}
+      farmName={farms.length === 1 ? farms[0].name : `${farms.length} farm locations`}
       polygons={polygons}
       plotPolygons={plotPolygons}
       pendingNote={

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { MapPinned, Layers, Eye, EyeOff, LocateFixed, Radio, RadioTower } from "lucide-react";
+import { MapPinned, Layers, Eye, EyeOff, LocateFixed, Radio, RadioTower, Box } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { pointInPolygon } from "@/lib/geo";
 import type { MapLocation, MapPolygon } from "./MapLibreMap";
@@ -110,16 +110,20 @@ export function MapWorkspace({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Farm Map</h1>
-          <p className="text-sm text-muted-foreground">{farmName}</p>
+          <p className="eyebrow">Land &amp; GIS <span className="px-1.5">/</span> {farmName}</p>
+          <h1 className="page-title mt-1">Farm map</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Satellite imagery, farm boundaries, and live GPS geofencing.</p>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
+          <Link href="/map/view3d" className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
+            <Box className="h-4 w-4" /> 3D terrain
+          </Link>
           {polygons.length > 0 && (
             <button
               type="button"
               onClick={toggleGeofence}
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-medium text-foreground hover:bg-muted",
+                "inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted",
                 tracking && "border-primary bg-primary-50 text-primary-800 dark:bg-primary-800 dark:text-white",
               )}
               aria-pressed={tracking}
@@ -128,7 +132,7 @@ export function MapWorkspace({
               {tracking ? "Stop geofence" : "Start geofence"}
             </button>
           )}
-          <Link href="/farms/new" className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2.5 text-sm font-medium text-white hover:bg-primary-600 sm:px-4">
+          <Link href="/farms/new" className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary-600 sm:px-4">
             <MapPinned className="h-4 w-4" /> Record boundary
           </Link>
         </div>
@@ -181,9 +185,8 @@ export function MapWorkspace({
               </li>
             ))}
           </ul>
-          <p className="mt-3 border-t border-black/5 pt-3 text-xs text-muted-foreground/70">
-            Buildings, roads, water, irrigation, soil, and satellite layers arrive with
-            Phase 2 GIS.
+          <p className="mt-3 border-t border-border pt-3 text-xs leading-relaxed text-muted-foreground">
+            Satellite basemap and terrain are available. Additional overlays appear when their organization data is connected.
           </p>
         </div>
 
@@ -216,9 +219,8 @@ export function MapWorkspace({
                 Selected: <span className="font-semibold">{selectedPolygon.name}</span>
               </p>
             ) : (
-              <p className="text-muted-foreground">
-                Select a farm boundary on the map to inspect it. Plot details, costs, and
-                profitability arrive with Phase 2+.
+                <p className="text-muted-foreground">
+                Select a recorded farm or plot boundary to inspect its mapped area.
               </p>
             )}
           </div>

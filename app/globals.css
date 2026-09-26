@@ -4,26 +4,28 @@
 
 :root {
   color-scheme: light;
-  --background: 100 25% 97%;
-  --foreground: 143 18% 14%;
+  --background: 60 9% 97%;
+  --foreground: 150 13% 14%;
   --card: 0 0% 100%;
-  --card-foreground: 143 18% 14%;
-  --border: 145 14% 89%;
-  --muted: 110 19% 95%;
-  --muted-foreground: 142 6% 46%;
+  --card-foreground: 150 13% 14%;
+  --border: 135 10% 87%;
+  --muted: 120 8% 94%;
+  --muted-foreground: 145 6% 43%;
   --sidebar: 0 0% 100%;
+  --brand: 151 48% 25%;
 }
 
 html.dark {
   color-scheme: dark;
-  --background: 148 24% 8%;
-  --foreground: 135 17% 91%;
-  --card: 148 20% 12%;
-  --card-foreground: 135 17% 91%;
-  --border: 145 13% 23%;
-  --muted: 148 17% 16%;
-  --muted-foreground: 140 9% 66%;
-  --sidebar: 148 20% 11%;
+  --background: 150 12% 8%;
+  --foreground: 135 14% 91%;
+  --card: 150 12% 11%;
+  --card-foreground: 135 14% 91%;
+  --border: 145 9% 22%;
+  --muted: 150 10% 15%;
+  --muted-foreground: 140 7% 64%;
+  --sidebar: 150 12% 10%;
+  --brand: 143 42% 48%;
 }
 
 @layer base {
@@ -33,6 +35,7 @@ html.dark {
   html {
     -webkit-tap-highlight-color: transparent;
     scroll-behavior: smooth;
+    background: hsl(var(--background));
   }
   body {
     @apply text-foreground antialiased;
@@ -43,6 +46,9 @@ html.dark {
   button, a, input, select, textarea {
     -webkit-tap-highlight-color: transparent;
   }
+  a { text-underline-offset: 3px; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 10px; background: hsl(var(--muted-foreground) / .28); background-clip: padding-box; }
   button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
     outline: 2px solid #4a9463;
     outline-offset: 2px;
@@ -51,20 +57,29 @@ html.dark {
 
 @layer components {
   .card {
-    @apply rounded-2xl border border-border bg-card text-card-foreground shadow-[0_2px_8px_rgba(25,48,31,0.035)];
+    @apply rounded-lg border border-border bg-card text-card-foreground;
   }
   .field-label {
     @apply mb-1.5 block text-[13px] font-semibold text-foreground;
   }
   .field-input {
-    @apply w-full rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm text-foreground outline-none transition
+    @apply h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground outline-none transition
       placeholder:text-muted-foreground/60
       focus:border-[#47865b] focus:ring-4 focus:ring-primary/10;
   }
   .stat-value {
-    @apply text-[26px] font-semibold tracking-tight text-[#1d3024];
+    @apply text-2xl font-semibold tabular-nums tracking-tight text-foreground;
   }
 }
+
+.page-title { @apply text-2xl font-semibold tracking-tight sm:text-[28px]; }
+.section-title { @apply text-base font-semibold tracking-tight; }
+.eyebrow { @apply text-[11px] font-semibold uppercase tracking-[.08em] text-muted-foreground; }
+.data-table { @apply w-full border-collapse text-left text-[13px]; }
+.data-table thead { @apply sticky top-0 z-10 bg-muted/80 text-[11px] font-medium uppercase tracking-wide text-muted-foreground; }
+.data-table th { @apply h-10 whitespace-nowrap px-3 font-medium; }
+.data-table td { @apply h-12 border-t border-border px-3; }
+.data-table tbody tr { @apply transition-colors hover:bg-muted/50; }
 
 html.dark body { background: hsl(var(--background)); }
 html.dark .bg-white { background-color: hsl(var(--card)); }
