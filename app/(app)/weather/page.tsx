@@ -4,7 +4,6 @@ import { listMemberships } from "@/services/orgService";
 import { listFarmGeo } from "@/services/farmService";
 import { listPlots } from "@/services/plotService";
 import { getFarmWeather, getWeatherIntelligence } from "@/services/weatherService";
-import { formatCurrency } from "@/lib/format";
 import Link from "next/link";
 import {
   Cloud,
@@ -14,8 +13,6 @@ import {
   Wind,
   AlertTriangle,
   Thermometer,
-  ChevronRight,
-  RefreshCw,
 } from "lucide-react";
 
 const CONDITION_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -34,7 +31,11 @@ function conditionLabel(c: string): string {
   return c.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
 }
 
-export default async function WeatherPage() {
+export default async function WeatherPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ farmId?: string }>;
+}) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
@@ -44,13 +45,14 @@ export default async function WeatherPage() {
   const orgId = memberships[0].organization.id;
   const farms = await listFarmGeo(user.id, orgId);
 
-  // Pick first farm with coordinates, or first farm
-  const farmWithCoords = farms.find((f) => f.centroidLat && f.centroidLng) ?? farms[0];
-  if (!farmWithCoords) {
+  const coordinateFarms = farms.filter(
+    (farm) => farm.centroidLat !== null && farm.centroidLng !== null,
+  );
+  if (farms.length === 0) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-6">
         <h1 className="text-2xl font-semibold">Weather</h1>
-        <p className="mt-2 text-muted-foreground">No farms with coordinates found. Add a farm boundary first.</p>
+        <p className="mt-2 text-muted-foreground">Add a farm and record its boundary to attach weather to its saved coordinates.</p>
         <Link href="/farms/new" className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-white">
           Create farm
         </Link>
@@ -58,19 +60,62 @@ export default async function WeatherPage() {
     );
   }
 
+  if (coordinateFarms.length === 0) {
+    return (
+      <div className="mx-auto max-w-4xl px-4 py-6">
+        <h1 className="text-2xl font-semibold">Weather by farm</h1>
+        <p className="mt-2 text-muted-foreground">Record a boundary for each farm to save its center coordinates and enable its local forecast.</p>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          {farms.map((farm) => <div key={farm.farmId} className="card p-4"><p className="font-medium">{farm.name}</p><p className="mt-1 text-sm text-muted-foreground">Coordinates not saved</p><Link href={`/farms/new?farmId=${farm.farmId}`} className="mt-3 inline-flex text-sm font-medium text-primary hover:underline">Record boundary</Link></div>)}
+        </div>
+      </div>
+    );
+  }
+
+  const params = await searchParams;
+  const farmWithCoords = coordinateFarms.find((farm) => farm.farmId === params.farmId) ?? coordinateFarms[0];
+  const farmWeatherResults = await Promise.all(coordinateFarms.map(async (farm) => {
+    try {
+      return { farm, weather: await getFarmWeather(user.id, farm.farmId), error: null as string | null };
+    } catch (error) {
+      return { farm, weather: null, error: error instanceof Error ? error.message : "Weather could not be loaded." };
+    }
+  }));
+  const weather = farmWeatherResults.find((entry) => entry.farm.farmId === farmWithCoords.farmId)?.weather ?? null;
+
+  if (!weather) {
+    const message = farmWeatherResults.find((entry) => entry.farm.farmId === farmWithCoords.farmId)?.error;
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-6">
+        <h1 className="text-2xl font-semibold">Weather by farm</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Select a farm to view its forecast at its saved boundary coordinates.</p>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {farmWeatherResults.map(({ farm, weather: farmWeather, error }) => (
+            <Link key={farm.farmId} href={`/weather?farmId=${farm.farmId}`} className={`card p-4 transition hover:border-primary ${farm.farmId === farmWithCoords.farmId ? "border-primary ring-1 ring-primary" : ""}`}>
+              <p className="font-semibold">{farm.name}</p>
+              <p className="mt-1 font-mono text-xs text-muted-foreground">{farm.centroidLat?.toFixed(5)}°, {farm.centroidLng?.toFixed(5)}°</p>
+              <p className="mt-3 text-sm text-muted-foreground">{farmWeather?.current ? `${farmWeather.current.temperatureC}°C · ${conditionLabel(farmWeather.current.condition)}` : error ?? "Weather unavailable"}</p>
+            </Link>
+          ))}
+        </div>
+        <div role="status" className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm">
+          <p className="font-medium">Live weather is unavailable for {farmWithCoords.name}.</p>
+          <p className="mt-1 text-muted-foreground">{message ?? "Connect a valid weather provider to show observations and forecasts."}</p>
+        </div>
+      </div>
+    );
+  }
+
   // Fetch plots for weather intelligence context
   const plots = await listPlots(user.id, orgId, farmWithCoords.farmId);
 
-  const [weather, intelligence] = await Promise.all([
-    getFarmWeather(user.id, farmWithCoords.farmId),
-    getWeatherIntelligence(user.id, farmWithCoords.farmId, plots.map(p => ({
+  const intelligence = await getWeatherIntelligence(user.id, farmWithCoords.farmId, plots.map(p => ({
       plotId: p.id,
       plotCode: p.code,
       plotName: p.name,
       areaHa: p.areaM2 ? Number(p.areaM2) / 10000 : 0,
       elevationM: p.elevationM ? Number(p.elevationM) : undefined
-    }))),
-  ]);
+    })));
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
@@ -93,6 +138,20 @@ export default async function WeatherPage() {
           </Link>
         </div>
       </div>
+
+      <section className="mb-6" aria-label="Weather for all farms">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">All farm locations</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {farmWeatherResults.map(({ farm, weather: farmWeather, error }) => (
+            <Link key={farm.farmId} href={`/weather?farmId=${farm.farmId}`} aria-current={farm.farmId === weather.farmId ? "page" : undefined} className={`card p-4 transition hover:border-primary ${farm.farmId === weather.farmId ? "border-primary ring-1 ring-primary" : ""}`}>
+              <div className="flex items-start justify-between gap-2"><p className="font-semibold">{farm.name}</p>{farmWeather?.current && <span className="shrink-0 font-mono text-lg font-semibold">{Math.round(farmWeather.current.temperatureC)}°C</span>}</div>
+              <p className="mt-1 font-mono text-xs text-muted-foreground">{farm.centroidLat?.toFixed(5)}°, {farm.centroidLng?.toFixed(5)}°</p>
+              <p className="mt-2 text-sm text-muted-foreground">{farmWeather?.current ? conditionLabel(farmWeather.current.condition) : error ?? "Weather unavailable"}</p>
+            </Link>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">Forecasts use each farm boundary’s center point. Provider: <a href="https://openweathermap.org/" target="_blank" rel="noreferrer" className="underline">OpenWeather</a> · Updated {new Date(weather.fetchedAt).toLocaleTimeString()}</p>
+      </section>
 
       {/* Current conditions */}
       {weather.current && (
@@ -129,7 +188,7 @@ export default async function WeatherPage() {
           </div>
           <div className="card p-4">
             <p className="text-sm text-muted-foreground">UV Index</p>
-            <p className="mt-1 font-mono text-2xl font-semibold">{weather.current.uvIndex}</p>
+            <p className="mt-1 font-mono text-2xl font-semibold">{weather.current.uvIndex ?? "—"}</p>
           </div>
         </div>
       )}
@@ -223,7 +282,7 @@ export default async function WeatherPage() {
       {/* Hourly forecast */}
       <div className="card mb-6">
         <div className="border-b border-black/5 p-4">
-          <h2 className="font-medium">Hourly forecast (48h)</h2>
+          <h2 className="font-medium">3-hour forecast (next 48h)</h2>
         </div>
         <div className="p-4 overflow-x-auto">
           <table className="w-full text-sm">
@@ -232,7 +291,7 @@ export default async function WeatherPage() {
                 <th className="text-left p-2 font-medium text-muted-foreground">Time</th>
                 <th className="text-center p-2 font-medium text-muted-foreground">Temp</th>
                 <th className="text-center p-2 font-medium text-muted-foreground">Feels</th>
-                <th className="text-center p-2 font-medium text-muted-foreground">Rain</th>
+                <th className="text-center p-2 font-medium text-muted-foreground">Rain / 3h</th>
                 <th className="text-center p-2 font-medium text-muted-foreground">Rain %</th>
                 <th className="text-center p-2 font-medium text-muted-foreground">Wind</th>
                 <th className="text-center p-2 font-medium text-muted-foreground">Condition</th>
@@ -260,7 +319,7 @@ export default async function WeatherPage() {
       {/* Daily forecast */}
       <div className="card">
         <div className="border-b border-black/5 p-4">
-          <h2 className="font-medium">7-day forecast</h2>
+          <h2 className="font-medium">5-day forecast</h2>
         </div>
         <div className="p-4 overflow-x-auto">
           <table className="w-full text-sm">
@@ -283,7 +342,7 @@ export default async function WeatherPage() {
                   <td className="p-2 text-center font-mono">{d.precipitationMm} mm</td>
                   <td className="p-2 text-center">{d.precipitationProbabilityPct}%</td>
                   <td className="p-2 text-center font-mono">{d.windMaxKph} km/h</td>
-                  <td className="p-2 text-center font-mono">{d.uvIndexMax}</td>
+                  <td className="p-2 text-center font-mono">{d.uvIndexMax ?? "—"}</td>
                   <td className="p-2 text-center capitalize">{conditionLabel(d.condition)}</td>
                 </tr>
               ))}

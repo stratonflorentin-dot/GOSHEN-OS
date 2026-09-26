@@ -21,14 +21,16 @@ Architecture gaps found against the docs include:
   is the documented and deployed backend; Supabase services are not presented
   as part of the current runtime.
 - **GIS stack:** the documented 2D standard is MapLibre; the active farm map is
-  now MapLibre. A 3D satellite toggle uses a pitched camera and MapTiler Hybrid
-  imagery when its public API key is configured, with Esri imagery as fallback;
-  it is not a terrain-enabled Cesium globe. The browser-only boundary and
-  geofence flows still need phone/GPS acceptance testing.
-- **Provider integrity:** the docs require integrations to say `PENDING` when
-  unavailable, but `services/weatherService.ts` registers generated mock
-  forecasts by default. The UI must label this clearly or use an unavailable
-  state.
+  now MapLibre. A 3D satellite toggle uses a pitched camera, MapTiler Hybrid
+  imagery and Terrain RGB elevation when its public API key is configured, with Esri imagery as fallback;
+  farm/plot boundary capture and the farm map start in satellite view and the
+  GPS recorder follows the current fix until the user moves the map. It is not
+  a Cesium terrain globe. Phone/GPS acceptance testing is still needed.
+- **Weather:** forecasts are keyed to each farm boundary centroid. Production
+  requires a valid OpenWeather key; current weather and 5 day / 3 hour forecasts
+  use the active API endpoints, with no generated mock shown in production.
+  Weather cards show each farm's centroid coordinates. Phone acceptance and
+  provider outage handling remain to be verified.
 - **Layering and module coverage:** the docs require thin App Router pages and
   business logic in module services. The present app has partial vertical
   slices and does not implement all the documented modules or acceptance
@@ -58,7 +60,7 @@ This is a repository review, live page inspection, and targeted database verific
 - Better Auth email/password routes and API handler, PostgreSQL accessed through `postgres.js`, and PostGIS migrations.
 - Organization, membership, farm, profile, invitation, role, and permission tables; organization/farm ownership columns and RLS policies across domain migrations.
 - IndexedDB, a GPS recorder, background sync code, a service worker, and a PWA manifest.
-- Provider interfaces for weather and 3D/map rendering. Mock weather is the configured fallback when `WEATHER_PROVIDER` is absent.
+- Provider interfaces for weather and 3D/map rendering. Mock weather is available only when explicitly selected outside production.
 
 ## Feature disposition
 
@@ -68,8 +70,8 @@ This is a repository review, live page inspection, and targeted database verific
 | Better Auth with PostgreSQL | Refactor | Kysely Postgres.js dialect and explicit schema/field mappings are deployed. The current Better Auth user table is `auth.user`. |
 | Authentication schema | Refactor | Migration 0008 and explicit Better Auth field mappings align the current `auth` schema; migration 0009 aligns the profile foreign key. Both migrations were applied in schema-only mode to the configured production database. |
 | Organization and farm schema/RLS | Keep, then verify | PostgreSQL migrations define tenant policies. The focused two-tenant RLS verification now passes against configured development; the complete policy matrix and assigned-farm role matrix still need coverage. |
-| MapLibre | Current 2D/oblique satellite map | All farm-map routes use MapLibre; `3D satellite` is an oblique camera mode over MapTiler Hybrid imagery (or Esri fallback). Verify tile availability, mobile controls, and geometry behavior on devices. |
-| 3D/Cesium | Planned high-quality terrain globe | Cesium terrain is not currently active; do not present the oblique MapLibre camera as a terrain model. |
+| MapLibre | Current 2D/3D satellite map | Farm and plot maps use MapLibre; `3D satellite` uses MapTiler Hybrid imagery and Terrain RGB elevation when configured (or Esri imagery fallback). Verify tile availability, mobile controls, and geometry behavior on devices. |
+| Cesium | Planned high-quality terrain globe | Cesium is not currently active; the available terrain view uses MapLibre with MapTiler elevation tiles. |
 | Weather | Keep provider interface; fix presentation | Mock provider returns generated values and is selected by default. Make mock status unmistakable in UI and production configuration; do not present mock forecasts as observations. |
 | Offline and PWA | Refactor | IndexedDB/service worker/sync code exists, but sync requests target GPS and other API endpoints that were not found in the current app routes. Test queue replay, tenant/session scoping, cache invalidation, and service-worker update behavior. |
 | Test infrastructure | Continue | Vitest and eight focused unit tests pass; meaningful database/RLS/workflow coverage is still needed. |

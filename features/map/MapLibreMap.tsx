@@ -23,6 +23,7 @@ type Props = {
   selectedId?: string | null;
   onSelect?: (id: string) => void;
   showZoomControls?: boolean;
+  initialView?: "streets" | "satellite";
   currentLocation?: MapLocation;
 };
 
@@ -30,6 +31,7 @@ const SOURCE_ID = "goshen-farm-boundaries";
 const SATELLITE_SOURCE_ID = "goshen-satellite";
 const LABEL_SOURCE_ID = "goshen-satellite-labels";
 const LOCATION_SOURCE_ID = "goshen-current-location";
+const TERRAIN_SOURCE_ID = "goshen-terrain-dem";
 
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_API_KEY?.trim();
 
@@ -173,6 +175,17 @@ function addOperationalLayers(map: MapLibreInstance) {
   }
 }
 
+function addSatelliteTerrain(map: MapLibreInstance) {
+  if (!MAPTILER_KEY || map.getSource(TERRAIN_SOURCE_ID)) return;
+  map.addSource(TERRAIN_SOURCE_ID, {
+    type: "raster-dem",
+    url: `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${encodeURIComponent(MAPTILER_KEY)}`,
+    tileSize: 512,
+    maxzoom: 14,
+  });
+  map.setTerrain({ source: TERRAIN_SOURCE_ID, exaggeration: 1.25 });
+}
+
 function fitBoundaries(map: MapLibreInstance, polygons: MapPolygon[]) {
   const coordinates = polygons.flatMap((polygon) => polygon.ring);
   if (coordinates.length === 0) return;
@@ -189,49 +202,63 @@ export default function MapLibreMap({
   selectedId,
   onSelect,
   showZoomControls = true,
+  initialView = "streets",
   currentLocation,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreInstance | null>(null);
   const centeredOnLocation = useRef(false);
-  const [view3d, setView3d] = useState(false);
+  const userMovedMapRef = useRef(false);
+  const polygonsRef = useRef(polygons);
+  const currentLocationRef = useRef(currentLocation);
+  const satelliteModeRef = useRef(initialView === "satellite");
+  polygonsRef.current = polygons;
+  currentLocationRef.current = currentLocation;
+  const [view3d, setView3d] = useState(initialView === "satellite");
   const [tileError, setTileError] = useState(false);
   const firstPolygon = polygons[0];
   const startCenter: [number, number] = center ?? firstPolygon?.ring[0] ?? [-6.443, 38.9];
 
   useEffect(() => {
     if (!containerRef.current) return;
-    let satellite = false;
-    let userMovedMap = false;
     const dark = document.documentElement.classList.contains("dark");
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: streetStyle(dark),
+      style: satelliteModeRef.current ? satelliteStyle() : streetStyle(dark),
       center: [startCenter[1], startCenter[0]],
       zoom,
       maxZoom: 22,
-      pitch: 0,
+      pitch: satelliteModeRef.current ? 58 : 0,
+      bearing: satelliteModeRef.current ? -18 : 0,
       cooperativeGestures: true,
     });
     mapRef.current = map;
     if (showZoomControls) map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "bottom-right");
 
-    const onUserMove = () => { userMovedMap = true; };
+    const onUserMove = () => { userMovedMapRef.current = true; };
     const onMapError = (event: { error?: Error }) => {
       if (event.error) setTileError(true);
     };
     const installData = () => {
+      const latestLocation = currentLocationRef.current;
+      const latestPolygons = polygonsRef.current;
       addOperationalLayers(map);
-      (map.getSource(SOURCE_ID) as GeoJSONSource).setData(boundaryCollection(polygons));
-      (map.getSource(LOCATION_SOURCE_ID) as GeoJSONSource).setData(locationCollection(currentLocation));
-      if (!userMovedMap) fitBoundaries(map, polygons);
+      if (satelliteModeRef.current) addSatelliteTerrain(map);
+      (map.getSource(SOURCE_ID) as GeoJSONSource).setData(boundaryCollection(latestPolygons));
+      (map.getSource(LOCATION_SOURCE_ID) as GeoJSONSource).setData(locationCollection(latestLocation));
+      if (latestLocation && !centeredOnLocation.current) {
+        map.easeTo({ center: [latestLocation.point[1], latestLocation.point[0]], zoom: Math.max(map.getZoom(), 16), duration: 0 });
+        centeredOnLocation.current = true;
+      } else if (!latestLocation && !userMovedMapRef.current) {
+        fitBoundaries(map, latestPolygons);
+      }
     };
     const onBoundaryClick = (event: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
       const id = event.features?.[0]?.properties?.id;
       if (typeof id === "string") onSelect?.(id);
     };
     const updateTheme = () => {
-      if (satellite || !map.isStyleLoaded()) return;
+      if (satelliteModeRef.current || !map.isStyleLoaded()) return;
       const nextDark = document.documentElement.classList.contains("dark");
       map.setStyle(streetStyle(nextDark));
       map.once("style.load", installData);
@@ -264,6 +291,8 @@ export default function MapLibreMap({
     if (currentLocation && !centeredOnLocation.current) {
       map.easeTo({ center: [currentLocation.point[1], currentLocation.point[0]], zoom: Math.max(map.getZoom(), 16), duration: 500 });
       centeredOnLocation.current = true;
+    } else if (currentLocation && !userMovedMapRef.current) {
+      map.easeTo({ center: [currentLocation.point[1], currentLocation.point[0]], duration: 250 });
     }
   }, [polygons, currentLocation]);
 
@@ -285,9 +314,11 @@ export default function MapLibreMap({
     if (!map) return;
     const next = !view3d;
     const dark = document.documentElement.classList.contains("dark");
+    satelliteModeRef.current = next;
     map.setStyle(next ? satelliteStyle() : streetStyle(dark));
     map.once("style.load", () => {
       addOperationalLayers(map);
+      if (next) addSatelliteTerrain(map);
       (map.getSource(SOURCE_ID) as GeoJSONSource).setData(boundaryCollection(polygons));
       (map.getSource(LOCATION_SOURCE_ID) as GeoJSONSource).setData(locationCollection(currentLocation));
       if (next) {

@@ -99,7 +99,7 @@ references a specific farm name.
 | ADR-03 | Financial ledger is append-only; corrections are reversal entries | Auditability; "never silently delete financial transactions" |
 | ADR-04 | Inventory is an event-sourced movement ledger; balances are derived (view + cached column) | Auditable stock; supports conversions, losses, transfers |
 | ADR-05 | Geometry stored as `geometry(GeometryCollection/…,4326)` with GiST indexes; areas computed with `ST_Area(geography)` | Correct acreage on the ellipsoid; spatial query performance |
-| ADR-06 | Satellite-basemap MapLibre 2D first; high-quality CesiumJS 3D (terrain + satellite imagery) in Phase 8 behind an adapter | Reliability first; 3D is visualization only |
+| ADR-06 | MapLibre operational maps use MapTiler Hybrid + Terrain RGB in 3D mode when configured; full CesiumJS globe remains behind an adapter in Phase 8 | Reliability first; 3D is visualization only |
 | ADR-07 | External data (weather, satellite, market, LLM) only through provider adapters with explicit `PENDING` state | No fake data, no vendor lock-in |
 | ADR-08 | AI answers farm questions by calling whitelisted analytics functions (structured retrieval), not free-text SQL | Security, correctness, evidence trail |
 | ADR-09 | Offline via IndexedDB outbox with idempotency keys and append-only-first design | Field data must never be lost; append-only records rarely conflict |

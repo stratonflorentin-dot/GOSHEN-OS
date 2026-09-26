@@ -10,9 +10,9 @@ export interface WeatherProvider {
   readonly name: WeatherProviderName;
   /** Current conditions at lat/lng. */
   current(lat: number, lng: number): Promise<CurrentWeather>;
-  /** Hourly forecast (next 48h). */
+  /** Forecast samples across the next 48 hours (provider resolution may vary). */
   hourly(lat: number, lng: number): Promise<HourlyForecast[]>;
-  /** Daily forecast (next 7-16 days). */
+  /** Daily forecast for the period available from this provider. */
   daily(lat: number, lng: number): Promise<DailyForecast[]>;
   /** Alerts for the area. */
   alerts(lat: number, lng: number): Promise<WeatherAlert[]>;
@@ -29,7 +29,7 @@ export interface CurrentWeather {
   windDirDeg: number;
   pressureHpa: number;
   visibilityKm: number;
-  uvIndex: number;
+  uvIndex?: number;
   condition: string; // e.g. "clear", "rain", "cloudy"
   conditionCode: string; // provider-specific code
   iconUrl?: string;
@@ -64,7 +64,7 @@ export interface DailyForecast {
   iconUrl?: string;
   sunrise?: string;
   sunset?: string;
-  uvIndexMax: number;
+  uvIndexMax?: number;
   raw: Record<string, unknown>;
 }
 

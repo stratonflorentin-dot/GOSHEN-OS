@@ -196,6 +196,7 @@ export function MapWorkspace({
                 selectedId={selected}
                 onSelect={setSelected}
                 currentLocation={location}
+                initialView="satellite"
                 className="h-full w-full"
               />
             ) : (

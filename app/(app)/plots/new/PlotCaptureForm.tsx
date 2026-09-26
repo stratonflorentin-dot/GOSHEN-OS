@@ -214,8 +214,10 @@ export default function NewPlotPage({ farms }: { farms: FarmOption[] }) {
             <FarmMap
               polygons={points.length >= 2 ? [{ id: "walk", name: "Plot", ring: points }] : []}
               center={coords ?? undefined}
+              currentLocation={coords ? { point: coords, accuracy: accuracy ?? 5 } : undefined}
               zoom={18}
-              showZoomControls={false}
+              initialView="satellite"
+              showZoomControls
             />
           </div>
 

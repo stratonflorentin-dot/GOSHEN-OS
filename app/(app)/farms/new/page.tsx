@@ -301,8 +301,10 @@ export default function NewFarmPage() {
             <FarmMap
               polygons={points.length >= 2 ? [{ id: "walk", name: "Boundary", ring: points }] : []}
               center={coords ?? undefined}
+              currentLocation={coords ? { point: coords, accuracy: accuracy ?? 5 } : undefined}
               zoom={17}
-              showZoomControls={false}
+              initialView="satellite"
+              showZoomControls
             />
           </div>
 
@@ -376,7 +378,8 @@ export default function NewFarmPage() {
         <div className="h-56 overflow-hidden rounded-2xl border border-black/5">
           <FarmMap
             polygons={points.length >= 2 ? [{ id: "preview", name: "Boundary", ring: points }] : []}
-            showZoomControls={false}
+            initialView="satellite"
+            showZoomControls
           />
         </div>
 

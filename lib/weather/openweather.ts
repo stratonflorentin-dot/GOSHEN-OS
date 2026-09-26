@@ -1,121 +1,134 @@
-/**
- * OpenWeatherMap provider (https://openweathermap.org/api).
- * Requires OPENWEATHER_API_KEY in environment.
- */
-import { WeatherProvider, CurrentWeather, HourlyForecast, DailyForecast, WeatherAlert } from "./providers";
+/** OpenWeather Current Weather + 5 day / 3-hour forecast API adapter. */
+import type { WeatherProvider, CurrentWeather, HourlyForecast, DailyForecast, WeatherAlert } from "./providers";
 
-const BASE = "https://api.openweathermap.org/data/3.0/onecall";
+const BASE = "https://api.openweathermap.org/data/2.5";
+type Json = Record<string, any>;
+const responseCache = new Map<string, { expiresAt: number; request: Promise<Json> }>();
+const TEN_MINUTES = 10 * 60 * 1000;
 
-function toCurrent(data: Record<string, unknown>): CurrentWeather {
-  const w = (data.weather as Array<Record<string, unknown>>)?.[0] ?? {};
+function weatherFields(data: Json) {
+  const weather = data.weather?.[0] ?? {};
   return {
-    observedAt: new Date((data.dt as number) * 1000).toISOString(),
-    temperatureC: Math.round(((data.temp as number) - 273.15) * 10) / 10,
-    feelsLikeC: Math.round(((data.feels_like as number) - 273.15) * 10) / 10,
-    humidityPct: data.humidity as number,
-    windKph: Math.round(((data.wind_speed as number) * 3.6) * 10) / 10,
-    windDirDeg: data.wind_deg as number,
-    pressureHpa: data.pressure as number,
-    visibilityKm: Math.round(((data.visibility as number) ?? 10000) / 1000),
-    uvIndex: data.uvi as number,
-    condition: (w.main as string)?.toLowerCase() ?? "unknown",
-    conditionCode: (w.id as number)?.toString() ?? "0",
-    iconUrl: w.icon ? `https://openweathermap.org/img/wn/${w.icon}@2x.png` : undefined,
+    condition: String(weather.description ?? weather.main ?? "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "_"),
+    conditionCode: String(weather.id ?? "0"),
+    iconUrl: weather.icon ? `https://openweathermap.org/img/wn/${weather.icon}@2x.png` : undefined,
+  };
+}
+
+function toCurrent(data: Json): CurrentWeather {
+  const fields = weatherFields(data);
+  return {
+    observedAt: new Date(Number(data.dt) * 1000).toISOString(),
+    temperatureC: Number(data.main.temp),
+    feelsLikeC: Number(data.main.feels_like),
+    humidityPct: Number(data.main.humidity),
+    windKph: Math.round(Number(data.wind?.speed ?? 0) * 36) / 10,
+    windDirDeg: Number(data.wind?.deg ?? 0),
+    pressureHpa: Number(data.main.pressure ?? 0),
+    visibilityKm: Math.round(Number(data.visibility ?? 10000) / 100) / 10,
+    ...fields,
     raw: data,
   };
 }
 
-function toHourly(data: Record<string, unknown>): HourlyForecast {
-  const w = (data.weather as Array<Record<string, unknown>>)?.[0] ?? {};
-  const rain = (data.rain as Record<string, number>) ?? {};
-  const snow = (data.snow as Record<string, number>) ?? {};
+function toHourly(data: Json): HourlyForecast {
+  const fields = weatherFields(data);
+  const rain = data.rain ?? {};
+  const snow = data.snow ?? {};
   return {
-    validAt: new Date((data.dt as number) * 1000).toISOString(),
-    temperatureC: Math.round(((data.temp as number) - 273.15) * 10) / 10,
-    feelsLikeC: Math.round(((data.feels_like as number) - 273.15) * 10) / 10,
-    humidityPct: data.humidity as number,
-    windKph: Math.round(((data.wind_speed as number) * 3.6) * 10) / 10,
-    windDirDeg: data.wind_deg as number,
-    precipitationMm: Math.round(((rain["1h"] ?? snow["1h"] ?? 0) * 10)) / 10,
-    precipitationProbabilityPct: Math.round((data.pop as number) * 100),
-    condition: (w.main as string)?.toLowerCase() ?? "unknown",
-    conditionCode: (w.id as number)?.toString() ?? "0",
-    iconUrl: w.icon ? `https://openweathermap.org/img/wn/${w.icon}@2x.png` : undefined,
+    validAt: new Date(Number(data.dt) * 1000).toISOString(),
+    temperatureC: Number(data.main.temp),
+    feelsLikeC: Number(data.main.feels_like),
+    humidityPct: Number(data.main.humidity),
+    windKph: Math.round(Number(data.wind?.speed ?? 0) * 36) / 10,
+    windDirDeg: Number(data.wind?.deg ?? 0),
+    precipitationMm: Number(rain["3h"] ?? snow["3h"] ?? 0),
+    precipitationProbabilityPct: Math.round(Number(data.pop ?? 0) * 100),
+    ...fields,
     raw: data,
   };
 }
 
-function toDaily(data: Record<string, unknown>): DailyForecast {
-  const w = (data.weather as Array<Record<string, unknown>>)?.[0] ?? {};
-  const temp = data.temp as Record<string, number>;
+function toDaily(data: Json, date: string): DailyForecast {
+  const entries: Json[] = data.entries;
+  const temps = entries.map((entry) => Number(entry.main.temp));
+  const conditions = new Map<string, { count: number; entry: Json }>();
+  for (const entry of entries) {
+    const id = String(entry.weather?.[0]?.id ?? "0");
+    const item = conditions.get(id) ?? { count: 0, entry };
+    item.count += 1;
+    conditions.set(id, item);
+  }
+  const representative = [...conditions.values()].sort((a, b) => b.count - a.count)[0]?.entry ?? entries[0];
+  const fields = weatherFields(representative);
   return {
-    date: new Date((data.dt as number) * 1000).toISOString().slice(0, 10),
-    tempMinC: Math.round(((temp.min ?? 273.15) - 273.15) * 10) / 10,
-    tempMaxC: Math.round(((temp.max ?? 273.15) - 273.15) * 10) / 10,
-    humidityAvgPct: data.humidity as number,
-    windMaxKph: Math.round(((data.wind_speed as number) * 3.6) * 10) / 10,
-    precipitationMm: Math.round(((data.rain as number) ?? (data.snow as number) ?? 0) * 10) / 10,
-    precipitationProbabilityPct: Math.round((data.pop as number) * 100),
-    condition: (w.main as string)?.toLowerCase() ?? "unknown",
-    conditionCode: (w.id as number)?.toString() ?? "0",
-    iconUrl: w.icon ? `https://openweathermap.org/img/wn/${w.icon}@2x.png` : undefined,
-    sunrise: data.sunrise ? new Date((data.sunrise as number) * 1000).toISOString().slice(11, 16) : undefined,
-    sunset: data.sunset ? new Date((data.sunset as number) * 1000).toISOString().slice(11, 16) : undefined,
-    uvIndexMax: data.uvi as number,
-    raw: data,
-  };
-}
-
-function toAlert(data: Record<string, unknown>): WeatherAlert {
-  return {
-    id: `owm-${data.event}-${data.start}`,
-    title: data.event as string,
-    description: data.description as string,
-    severity: "moderate",
-    certainty: "likely",
-    urgency: "expected",
-    effectiveAt: new Date((data.start as number) * 1000).toISOString(),
-    expiresAt: new Date((data.end as number) * 1000).toISOString(),
-    areas: [],
-    raw: data,
+    date,
+    tempMinC: Math.min(...temps),
+    tempMaxC: Math.max(...temps),
+    humidityAvgPct: Math.round(entries.reduce((sum, entry) => sum + Number(entry.main.humidity), 0) / entries.length),
+    windMaxKph: Math.round(Math.max(...entries.map((entry) => Number(entry.wind?.speed ?? 0))) * 36) / 10,
+    precipitationMm: Math.round(entries.reduce((sum, entry) => sum + Number(entry.rain?.["3h"] ?? entry.snow?.["3h"] ?? 0), 0) * 10) / 10,
+    precipitationProbabilityPct: Math.round(Math.max(...entries.map((entry) => Number(entry.pop ?? 0))) * 100),
+    ...fields,
+    raw: { entries },
   };
 }
 
 export function createOpenWeatherProvider(): WeatherProvider {
-  const apiKey = process.env.OPENWEATHER_API_KEY;
+  const apiKey = process.env.OPENWEATHER_API_KEY ?? "";
   if (!apiKey) throw new Error("OPENWEATHER_API_KEY not set");
 
-  async function fetchOneCall(lat: number, lng: number) {
-    const url = `${BASE}?lat=${lat}&lon=${lng}&exclude=minutely&appid=${apiKey}&units=metric`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`OpenWeather error ${res.status}: ${txt}`);
-    }
-    return res.json();
+  function request(kind: "weather" | "forecast", lat: number, lng: number): Promise<Json> {
+    const key = `${kind}:${lat.toFixed(4)},${lng.toFixed(4)}`;
+    const cached = responseCache.get(key);
+    if (cached && cached.expiresAt > Date.now()) return cached.request;
+
+    const url = new URL(`${BASE}/${kind}`);
+    url.searchParams.set("lat", String(lat));
+    url.searchParams.set("lon", String(lng));
+    url.searchParams.set("appid", apiKey);
+    url.searchParams.set("units", "metric");
+    const pending = fetch(url, { signal: AbortSignal.timeout(12_000) }).then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`OpenWeather request failed (${response.status}). Check the provider key and access.`);
+      }
+      return response.json() as Promise<Json>;
+    }).catch((error) => {
+      responseCache.delete(key);
+      throw error;
+    });
+    responseCache.set(key, { expiresAt: Date.now() + TEN_MINUTES, request: pending });
+    return pending;
+  }
+
+  async function forecast(lat: number, lng: number): Promise<Json> {
+    return request("forecast", lat, lng);
   }
 
   return {
     name: "openweather",
-
-    async current(lat: number, lng: number): Promise<CurrentWeather> {
-      const data = await fetchOneCall(lat, lng);
-      return toCurrent(data.current);
+    async current(lat, lng) {
+      return toCurrent(await request("weather", lat, lng));
     },
-
-    async hourly(lat: number, lng: number): Promise<HourlyForecast[]> {
-      const data = await fetchOneCall(lat, lng);
-      return (data.hourly ?? []).slice(0, 48).map(toHourly);
+    async hourly(lat, lng) {
+      const data = await forecast(lat, lng);
+      return (data.list ?? []).slice(0, 16).map(toHourly);
     },
-
-    async daily(lat: number, lng: number): Promise<DailyForecast[]> {
-      const data = await fetchOneCall(lat, lng);
-      return (data.daily ?? []).slice(0, 7).map(toDaily);
+    async daily(lat, lng) {
+      const data = await forecast(lat, lng);
+      const timezoneOffset = Number(data.city?.timezone ?? 0);
+      const grouped = new Map<string, Json[]>();
+      for (const entry of data.list ?? []) {
+        const date = new Date((Number(entry.dt) + timezoneOffset) * 1000).toISOString().slice(0, 10);
+        const items = grouped.get(date) ?? [];
+        items.push(entry);
+        grouped.set(date, items);
+      }
+      return [...grouped].slice(0, 5).map(([date, entries]) => toDaily({ entries }, date));
     },
-
-    async alerts(lat: number, lng: number): Promise<WeatherAlert[]> {
-      const data = await fetchOneCall(lat, lng);
-      return (data.alerts ?? []).map(toAlert);
+    async alerts(): Promise<WeatherAlert[]> {
+      // The basic current + 5 day endpoints do not include government alerts.
+      return [];
     },
   };
 }

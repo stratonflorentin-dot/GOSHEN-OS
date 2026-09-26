@@ -2,11 +2,12 @@
 
 ## 1. Provider Adapter Pattern
 
-**Implementation status:** the current app registers a generated mock provider
-when no provider is configured. This does not meet the production requirement
-below. Until a real provider is selected and clearly identified in the UI,
-weather must be presented as demo data or unavailable, never as observed farm
-conditions.
+**Implementation status:** farm weather is requested at each saved farm
+boundary centroid. The current OpenWeather adapter supports current conditions
+and its 5 day / 3 hour forecast. One Call 3.0 requires a separate subscription
+and is not used. Mock weather can be explicitly enabled in development only;
+production never presents mock values as observed farm conditions. The UI shows
+farm coordinates, provider, freshness, and forecast resolution.
 
 ```ts
 interface WeatherProvider {
@@ -18,8 +19,7 @@ interface WeatherProvider {
 ```
 
 - One interface, swappable implementations (`services/adapters/weather/`).
-  First implementation: OpenWeatherMap (or equivalent) — final vendor chosen at
-  Phase 7 kickoff; switching later is a config change, not a refactor.
+  Current adapter: OpenWeather current conditions and 5 day / 3 hour forecast.
 - **No provider connected ⇒ status `pending`**: UI shows "Weather data not
   connected yet" with setup guidance. **No placeholder forecasts, ever.**
 - Provider pulls run server-side through scheduled jobs or protected Next.js
@@ -39,8 +39,10 @@ interface WeatherProvider {
 
 ## 3. Display
 
-- Farm weather page + dashboard widget: Today / Tomorrow / 7-day (from
-  provider capability), with **data freshness timestamps** and provider label.
+- Farm weather page + dashboard widget: farm-specific current weather and
+  provider-supported forecasts, with coordinates, **data freshness timestamps**,
+  and provider attribution. The current forecast resolves every three hours
+  for up to five days; it does not provide alerts or UV values.
 - Longer-term trends only when the provider supplies reliable historical data;
   otherwise the section is hidden — not approximated.
 - Alerts (`weather_alerts`): provider-issued alerts mapped to normalized

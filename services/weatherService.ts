@@ -3,25 +3,32 @@
  * Handles caching, farm-scoped queries, and farm-intelligence helpers (§27).
  */
 import { withUser } from "@/lib/db";
-import { getDefaultWeatherProvider, type WeatherProvider, type CurrentWeather, type HourlyForecast, type DailyForecast, type WeatherAlert } from "@/lib/weather/providers";
-import { registerWeatherProvider } from "@/lib/weather/providers";
+import { getWeatherProvider, registerWeatherProvider, type WeatherProvider, type CurrentWeather, type HourlyForecast, type DailyForecast, type WeatherAlert } from "@/lib/weather/providers";
 import { mockWeatherProvider } from "@/lib/weather/mock";
 import { recommendationEngine, type WeatherContext, type CropContext, type Recommendation } from "@/lib/agricultural/recommendations";
 
-// Register providers at module load
-registerWeatherProvider(mockWeatherProvider);
+let openWeatherPromise: Promise<WeatherProvider> | undefined;
 
-// Lazy-load OpenWeather provider when API key is available
-let openWeatherRegistered = false;
-async function ensureOpenWeatherRegistered() {
-  if (openWeatherRegistered || !process.env.OPENWEATHER_API_KEY) return;
-  const { createOpenWeatherProvider } = await import("@/lib/weather/openweather");
-  registerWeatherProvider(createOpenWeatherProvider());
-  openWeatherRegistered = true;
+async function getConfiguredProvider(): Promise<WeatherProvider> {
+  const configured = process.env.WEATHER_PROVIDER?.trim().toLowerCase();
+  if (configured === "openweather" || (!configured && process.env.OPENWEATHER_API_KEY)) {
+    openWeatherPromise ??= import("@/lib/weather/openweather").then(({ createOpenWeatherProvider }) => {
+      const provider = createOpenWeatherProvider();
+      registerWeatherProvider(provider);
+      return provider;
+    }).catch((error) => {
+      openWeatherPromise = undefined;
+      throw error;
+    });
+    return openWeatherPromise;
+  }
+
+  if (configured === "mock" && process.env.NODE_ENV !== "production") {
+    return mockWeatherProvider;
+  }
+
+  throw new Error("Weather provider is not configured. Add a valid provider key to the server environment.");
 }
-
-// Call it immediately (fire-and-forget)
-ensureOpenWeatherRegistered();
 
 export type FarmWeather = {
   farmId: string;
@@ -33,6 +40,7 @@ export type FarmWeather = {
   daily: DailyForecast[];
   alerts: WeatherAlert[];
   fetchedAt: string;
+  provider: string;
 };
 
 export type WeatherIntelligence = {
@@ -57,45 +65,50 @@ function cacheKey(farmId: string): string {
 }
 
 export async function getFarmWeather(userId: string, farmId: string): Promise<FarmWeather> {
-  return withUser(userId, async (db) => {
-    const key = cacheKey(farmId);
-    const cached = cache.get(key);
-    if (cached && cached.expires > Date.now()) return cached.data;
+  const rows = await withUser(userId, async (db) => db`
+    select f.id, f.name,
+           ST_Y(f.centroid::geometry) as lat,
+           ST_X(f.centroid::geometry) as lng
+    from public.farms f
+    where f.id = ${farmId} and f.status = 'active'
+  `);
+  if (!rows[0]) throw new Error("Farm not found");
 
-    const rows = await db`
-      select id, name, gps_lat, gps_lng from public.farms
-      where id = ${farmId}
-    `;
-    if (!rows[0]) throw new Error("Farm not found");
+  const farm = rows[0];
+  const lat = farm.lat == null ? Number.NaN : Number(farm.lat);
+  const lng = farm.lng == null ? Number.NaN : Number(farm.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    throw new Error("This farm has no saved boundary coordinates. Record its boundary first.");
+  }
 
-    const farm = rows[0];
-    const lat = Number(farm.gps_lat);
-    const lng = Number(farm.gps_lng);
-    if (!lat || !lng) throw new Error("Farm has no coordinates");
+  const key = cacheKey(`${userId}:${farmId}`);
+  const cached = cache.get(key);
+  if (cached && cached.expires > Date.now()) return cached.data;
 
-    const provider: WeatherProvider = getDefaultWeatherProvider();
-    const [current, hourly, daily, alerts] = await Promise.all([
-      provider.current(lat, lng).catch(() => null),
-      provider.hourly(lat, lng).catch(() => []),
-      provider.daily(lat, lng).catch(() => []),
-      provider.alerts(lat, lng).catch(() => []),
-    ]);
+  // Keep slow provider requests outside the authenticated database transaction.
+  const provider: WeatherProvider = await getConfiguredProvider();
+  const [current, hourly, daily, alerts] = await Promise.all([
+    provider.current(lat, lng),
+    provider.hourly(lat, lng),
+    provider.daily(lat, lng),
+    provider.alerts(lat, lng),
+  ]);
 
-    const result: FarmWeather = {
-      farmId: farm.id as string,
-      farmName: farm.name as string,
-      lat,
-      lng,
-      current,
-      hourly,
-      daily,
-      alerts,
-      fetchedAt: new Date().toISOString(),
-    };
+  const result: FarmWeather = {
+    farmId: farm.id as string,
+    farmName: farm.name as string,
+    lat,
+    lng,
+    current,
+    hourly,
+    daily,
+    alerts,
+    fetchedAt: new Date().toISOString(),
+    provider: provider.name,
+  };
 
-    cache.set(key, { data: result, expires: Date.now() + CACHE_TTL_MS });
-    return result;
-  });
+  cache.set(key, { data: result, expires: Date.now() + CACHE_TTL_MS });
+  return result;
 }
 
 /**
@@ -152,16 +165,16 @@ export function generateWeatherIntelligence(
   });
 
   // Heavy rain → drainage / irrigation hold / fertilizer delay
-  const heavyRainHours = hourly.filter((h) => h.precipitationMm > 10).length;
+  const heavyRainPeriods = hourly.filter((h) => h.precipitationMm > 10).length;
   const heavyRainDays = daily.filter((d) => d.precipitationMm > 20).length;
-  if (heavyRainHours > 0 || heavyRainDays > 0) {
+  if (heavyRainPeriods > 0 || heavyRainDays > 0) {
     recs.push({
       type: "drainage",
       priority: heavyRainDays > 1 ? "high" : "medium",
       title: "Heavy rainfall expected",
-      description: `${heavyRainHours} hour(s) and ${heavyRainDays} day(s) with >10-20 mm rain. Check drainage on low-lying plots.`,
+      description: `${heavyRainPeriods} forecast period(s) and ${heavyRainDays} day(s) indicate heavy rain. Check drainage on low-lying plots.`,
       evidence: [
-        `Hourly forecast shows ${heavyRainHours} hours with >10 mm precipitation`,
+        `Three-hour forecast shows ${heavyRainPeriods} periods with >10 mm precipitation`,
         `Daily forecast shows ${heavyRainDays} days with >20 mm precipitation`,
       ],
       affectedPlots: lowLyingPlots.length > 0 ? lowLyingPlots.map(p => ({
@@ -174,14 +187,14 @@ export function generateWeatherIntelligence(
   }
 
   // Frost risk
-  const frostHours = hourly.filter((h) => h.temperatureC <= 2).length;
-  if (frostHours > 0) {
+  const frostPeriods = hourly.filter((h) => h.temperatureC <= 2).length;
+  if (frostPeriods > 0) {
     recs.push({
       type: "frost",
       priority: "high",
       title: "Frost risk detected",
-      description: `${frostHours} hour(s) with temperature ≤2°C in the next 48h. Protect sensitive crops.`,
-      evidence: [`Hourly forecast shows ${frostHours} hours at or below 2°C`],
+      description: `${frostPeriods} three-hour forecast period(s) at or below 2°C in the next 48h. Protect sensitive crops.`,
+      evidence: [`Three-hour forecast shows ${frostPeriods} periods at or below 2°C`],
       confidence: 0.8,
     });
     recs.push({
@@ -213,20 +226,20 @@ export function generateWeatherIntelligence(
   }
 
   // High wind → spraying caution
-  const highWindHours = hourly.filter((h) => h.windKph > 20).length;
-  if (highWindHours > 0) {
+  const highWindPeriods = hourly.filter((h) => h.windKph > 20).length;
+  if (highWindPeriods > 0) {
     recs.push({
       type: "spraying",
       priority: "medium",
       title: "High wind — avoid spraying",
-      description: `${highWindHours} hour(s) with wind >20 km/h. Drift risk is elevated.`,
-      evidence: [`Hourly forecast shows ${highWindHours} hours with wind speed >20 km/h`],
+      description: `${highWindPeriods} three-hour forecast period(s) with wind >20 km/h. Drift risk is elevated.`,
+      evidence: [`Three-hour forecast shows ${highWindPeriods} periods with wind speed >20 km/h`],
       confidence: 0.75,
     });
   }
 
   // UV index
-  const highUvDays = daily.filter((d) => d.uvIndexMax >= 8).length;
+  const highUvDays = daily.filter((d) => (d.uvIndexMax ?? -1) >= 8).length;
   if (highUvDays > 0) {
     recs.push({
       type: "general",

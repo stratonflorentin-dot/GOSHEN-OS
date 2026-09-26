@@ -5,9 +5,6 @@ import {
   Sprout,
   Beef,
   TrendingUp,
-  CloudRain,
-  Thermometer,
-  Wind,
   ChevronRight,
   CircleCheck,
   TriangleAlert,
@@ -113,27 +110,23 @@ export default async function DashboardPage() {
         </div>
 
         <div className="card p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Weather
-          </h2>
-          <div className="flex flex-col items-center justify-center gap-4 py-6 text-center">
-            <CloudRain className="h-10 w-10 text-muted-foreground/40" />
-            <p className="text-sm font-medium">Weather integration pending</p>
-            <p className="text-xs text-muted-foreground/70">
-              Forecasts arrive with the weather provider adapter (Phase 7). No forecast is
-              shown until a provider is connected.
-            </p>
-            <div className="flex gap-4 text-xs text-muted-foreground/60">
-              <span className="inline-flex items-center gap-1">
-                <Thermometer className="h-3.5 w-3.5" /> —
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <CloudRain className="h-3.5 w-3.5" /> —
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <Wind className="h-3.5 w-3.5" /> —
-              </span>
-            </div>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Farm weather</h2>
+            <Link href="/weather" className="text-xs font-medium text-primary-700 hover:underline">View forecasts</Link>
+          </div>
+          <p className="mb-3 text-xs text-muted-foreground">Local conditions are matched to each farm’s saved boundary coordinates.</p>
+          <div className="space-y-2">
+            {farms.slice(0, 4).map((farm) => (
+              <Link key={farm.farmId} href={`/weather?farmId=${farm.farmId}`} className="flex items-center justify-between gap-2 rounded-lg border border-border/60 p-2.5 transition hover:border-primary">
+                <span className="min-w-0 truncate text-sm font-medium">{farm.name}</span>
+                <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                  {farm.centroidLat !== null && farm.centroidLng !== null
+                    ? `${farm.centroidLat.toFixed(3)}, ${farm.centroidLng.toFixed(3)}`
+                    : "Add boundary"}
+                </span>
+              </Link>
+            ))}
+            {farms.length === 0 && <p className="text-sm text-muted-foreground">Create a farm and record its boundary to enable local weather.</p>}
           </div>
         </div>
       </div>
