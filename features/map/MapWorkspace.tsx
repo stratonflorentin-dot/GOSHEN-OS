@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { MapPinned, Layers, Eye, EyeOff, LocateFixed, Radio, RadioTower, Box, Pencil, Save, X } from "lucide-react";
+import { MapPinned, Layers, Eye, EyeOff, LocateFixed, Radio, RadioTower, Box, Pencil, Save, X, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { pointInPolygon } from "@/lib/geo";
 import type { MapLocation, MapPolygon } from "./MapLibreMap";
@@ -44,6 +44,7 @@ export function MapWorkspace({
   const [selected, setSelected] = useState<string | null>(null);
   const [editableId, setEditableId] = useState<string | null>(null);
   const [editedPolygons, setEditedPolygons] = useState<MapPolygon[]>([]);
+  const [undoStack, setUndoStack] = useState<{ id: string; ring: [number, number][] }[]>([]);
   const [editError, setEditError] = useState<string | null>(null);
   const [editSaved, setEditSaved] = useState(false);
   const [isSaving, startSaving] = useTransition();
@@ -125,6 +126,7 @@ export function MapWorkspace({
       { ...selectedPolygon, ring: selectedPolygon.ring.map((point) => [...point] as [number, number]) },
     ]);
     setEditableId(selectedPolygon.id);
+    setUndoStack([]);
     setEditError(null);
     setEditSaved(false);
   }
@@ -132,6 +134,7 @@ export function MapWorkspace({
   function cancelBoundaryEdit() {
     setEditableId(null);
     setEditedPolygons([]);
+    setUndoStack([]);
     setEditError(null);
   }
 
@@ -148,12 +151,26 @@ export function MapWorkspace({
         }
         setEditableId(null);
         setEditedPolygons([]);
+        setUndoStack([]);
         setEditSaved(true);
         router.refresh();
       } catch {
         setEditError("Could not save the farm boundary. Please check your connection and try again.");
       }
     });
+  }
+
+  function undoBoundaryMove() {
+    const previous = undoStack.at(-1);
+    if (!previous) return;
+    setEditedPolygons((current) => {
+      const original = polygons.find((polygon) => polygon.id === previous.id);
+      const existing = current.find((polygon) => polygon.id === previous.id) ?? original;
+      if (!existing) return current;
+      return [...current.filter((polygon) => polygon.id !== previous.id), { ...existing, ring: previous.ring }];
+    });
+    setUndoStack((current) => current.slice(0, -1));
+    setEditError(null);
   }
 
   return (
@@ -196,8 +213,9 @@ export function MapWorkspace({
 
       {editableId && editingPolygon && (
         <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm">Drag the white handles to reshape <span className="font-semibold">{editingPolygon.name}</span>. Changes are saved when you press Save fence.</p>
+          <p className="text-sm">Drag the white handles to reshape <span className="font-semibold">{editingPolygon.name}</span>. The editor blocks moves that would make the fence cross itself.</p>
           <div className="flex shrink-0 gap-2">
+            <button type="button" onClick={undoBoundaryMove} disabled={isSaving || undoStack.length === 0} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-medium disabled:opacity-50"><Undo2 className="h-4 w-4" /> Undo move</button>
             <button type="button" onClick={cancelBoundaryEdit} disabled={isSaving} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-medium disabled:opacity-60"><X className="h-4 w-4" /> Cancel</button>
             <button type="button" onClick={saveBoundaryEdit} disabled={isSaving} className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-white disabled:opacity-60"><Save className="h-4 w-4" /> {isSaving ? "Saving…" : "Save fence"}</button>
           </div>
@@ -273,6 +291,12 @@ export function MapWorkspace({
                   if (!existing) return current;
                   return [...current.filter((polygon) => polygon.id !== id), { ...existing, ring }];
                 })}
+                onEditDragStart={(id, ring) => setUndoStack((current) => [...current.slice(-29), { id, ring }])}
+                onEditValidationChange={(crossesBoundary) => {
+                  setEditError(crossesBoundary
+                    ? "That move would make the fence cross itself. Move the handle along the existing outline."
+                    : null);
+                }}
                 currentLocation={location}
                 initialView="satellite"
                 className="h-full w-full"

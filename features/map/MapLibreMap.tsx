@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl, { type GeoJSONSource, type Map as MapLibreInstance, type StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Map as MapIcon, Satellite, Rotate3D } from "lucide-react";
-import { openRing } from "./geometry";
+import { openRing, vertexMoveKeepsRingValid } from "./geometry";
 
 export type MapPolygon = {
   id: string;
@@ -28,6 +28,8 @@ type Props = {
   currentLocation?: MapLocation;
   editableId?: string | null;
   onEditPolygonChange?: (id: string, ring: [number, number][]) => void;
+  onEditDragStart?: (id: string, ring: [number, number][]) => void;
+  onEditValidationChange?: (crossesBoundary: boolean) => void;
 };
 
 const SOURCE_ID = "goshen-farm-boundaries";
@@ -238,6 +240,8 @@ export default function MapLibreMap({
   currentLocation,
   editableId = null,
   onEditPolygonChange,
+  onEditDragStart,
+  onEditValidationChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreInstance | null>(null);
@@ -247,12 +251,16 @@ export default function MapLibreMap({
   const currentLocationRef = useRef(currentLocation);
   const editableIdRef = useRef(editableId);
   const onEditPolygonChangeRef = useRef(onEditPolygonChange);
+  const onEditDragStartRef = useRef(onEditDragStart);
+  const onEditValidationChangeRef = useRef(onEditValidationChange);
   const activeVertexDragRef = useRef<{ pointerId: number; polygonId: string; vertexIndex: number } | null>(null);
   const satelliteModeRef = useRef(initialView === "satellite");
   polygonsRef.current = polygons;
   currentLocationRef.current = currentLocation;
   editableIdRef.current = editableId;
   onEditPolygonChangeRef.current = onEditPolygonChange;
+  onEditDragStartRef.current = onEditDragStart;
+  onEditValidationChangeRef.current = onEditValidationChange;
   const [view3d, setView3d] = useState(initialView === "satellite");
   const [tileError, setTileError] = useState(false);
   const firstPolygon = polygons[0];
@@ -325,6 +333,9 @@ export default function MapLibreMap({
       if (!vertex) return;
       const vertexIndex = Number(vertex.properties?.vertexIndex);
       if (!Number.isInteger(vertexIndex)) return;
+      const polygon = polygonsRef.current.find((candidate) => candidate.id === polygonId);
+      if (!polygon) return;
+      onEditDragStartRef.current?.(polygonId, polygon.ring.map((point) => [...point] as [number, number]));
       activeVertexDragRef.current = { pointerId: event.pointerId, polygonId, vertexIndex };
       event.preventDefault();
       event.stopPropagation();
@@ -337,6 +348,12 @@ export default function MapLibreMap({
       if (!drag || drag.pointerId !== event.pointerId) return;
       const bounds = canvas.getBoundingClientRect();
       const [lng, lat] = map.unproject([event.clientX - bounds.left, event.clientY - bounds.top]).toArray();
+      const sourcePolygon = polygonsRef.current.find((polygon) => polygon.id === drag.polygonId);
+      if (!sourcePolygon || !vertexMoveKeepsRingValid(sourcePolygon.ring, drag.vertexIndex, [lat, lng])) {
+        onEditValidationChangeRef.current?.(true);
+        return;
+      }
+      onEditValidationChangeRef.current?.(false);
       const nextPolygons = polygonsRef.current.map((polygon) => {
         if (polygon.id !== drag.polygonId || !polygon.ring[drag.vertexIndex]) return polygon;
         const nextRing = polygon.ring.map((vertexPoint, index) =>
