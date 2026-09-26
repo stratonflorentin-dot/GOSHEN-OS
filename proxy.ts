@@ -25,6 +25,6 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     // App pages only; exclude static assets, images, api, and auth pages.
-    "/((?!_next/static|_next/image|favicon.ico|api/|login|register|check-email).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.json|api/|login|register|check-email).*)",
   ],
 };
