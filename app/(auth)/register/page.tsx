@@ -21,19 +21,35 @@ export default function RegisterPage() {
     e.preventDefault();
     setError(null);
     setPending(true);
-    const { error } = await authClient.signUp.email({
-      email,
-      password,
-      name: fullName,
-    });
-    setPending(false);
-    if (error) {
-      setError(error.message ?? "Could not create your account");
-      return;
+    try {
+      const result = await authClient.signUp.email({
+        email: email.trim(),
+        password,
+        name: fullName.trim(),
+      });
+      if (result.error) {
+        const code = result.error.code;
+        setError(
+          code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL"
+            ? "An account with this email already exists. Sign in instead."
+            : code === "PASSWORD_TOO_SHORT"
+              ? "Choose a password with at least 8 characters."
+              : code === "PASSWORD_TOO_LONG"
+                ? "Choose a password with no more than 72 characters."
+                : code === "INVALID_EMAIL"
+                  ? "Enter a valid email address."
+                  : "We couldn’t create your account. Please try again.",
+        );
+        return;
+      }
+      // Email verification is disabled, so successful signup is ready to use.
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      setError("Could not reach the sign-up service. Check your connection and try again.");
+    } finally {
+      setPending(false);
     }
-    // Email-only flow: Neon Auth emails a confirmation via shared SMTP.
-    router.push("/check-email");
-    router.refresh();
   }
 
   return (
@@ -80,6 +96,7 @@ export default function RegisterPage() {
                 autoComplete="new-password"
                 required
                 minLength={8}
+                maxLength={72}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="At least 8 characters"
@@ -98,8 +115,8 @@ export default function RegisterPage() {
                 )}
               </button>
             </div>
-            <FieldError>{error ?? undefined}</FieldError>
           </div>
+          <FieldError>{error ?? undefined}</FieldError>
           <Button type="submit" className="w-full" disabled={pending}>
             {pending ? "Creating account…" : "Create account"}
           </Button>
