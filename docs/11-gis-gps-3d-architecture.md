@@ -3,10 +3,10 @@
 ## Current Implementation Status
 
 The deployed map uses MapLibre GL JS for operational geometries. Its **3D
-satellite** view uses Esri World Imagery with an oblique pitched camera, based
-on the interaction pattern in the owner's Calvary Connect map. This provides
-an accessible satellite view without requiring the failed CARTO API-key style
-shown in the field-capture screenshot. It is not a terrain-enabled Cesium
+satellite** view uses MapTiler Hybrid imagery when
+`NEXT_PUBLIC_MAPTILER_API_KEY` is configured, with Esri World Imagery as a
+keyless fallback, and an oblique pitched camera based on the interaction
+pattern in the owner's Calvary Connect map. It is not a terrain-enabled Cesium
 globe; Cesium terrain/imagery remains the planned Phase 8 implementation.
 
 Boundary recording uses browser geolocation and displays accuracy. Automated

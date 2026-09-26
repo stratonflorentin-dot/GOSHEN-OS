@@ -21,7 +21,8 @@ Architecture gaps found against the docs include:
   is the documented and deployed backend; Supabase services are not presented
   as part of the current runtime.
 - **GIS stack:** the documented 2D standard is MapLibre; the active farm map is
-  now MapLibre. A 3D satellite toggle uses a pitched camera and Esri imagery;
+  now MapLibre. A 3D satellite toggle uses a pitched camera and MapTiler Hybrid
+  imagery when its public API key is configured, with Esri imagery as fallback;
   it is not a terrain-enabled Cesium globe. The browser-only boundary and
   geofence flows still need phone/GPS acceptance testing.
 - **Provider integrity:** the docs require integrations to say `PENDING` when
@@ -67,7 +68,7 @@ This is a repository review, live page inspection, and targeted database verific
 | Better Auth with PostgreSQL | Refactor | Kysely Postgres.js dialect and explicit schema/field mappings are deployed. The current Better Auth user table is `auth.user`. |
 | Authentication schema | Refactor | Migration 0008 and explicit Better Auth field mappings align the current `auth` schema; migration 0009 aligns the profile foreign key. Both migrations were applied in schema-only mode to the configured production database. |
 | Organization and farm schema/RLS | Keep, then verify | PostgreSQL migrations define tenant policies. The focused two-tenant RLS verification now passes against configured development; the complete policy matrix and assigned-farm role matrix still need coverage. |
-| MapLibre | Current 2D/oblique satellite map | All farm-map routes use MapLibre; `3D satellite` is an oblique camera mode over Esri imagery. Verify tile availability, mobile controls, and geometry behavior on devices. |
+| MapLibre | Current 2D/oblique satellite map | All farm-map routes use MapLibre; `3D satellite` is an oblique camera mode over MapTiler Hybrid imagery (or Esri fallback). Verify tile availability, mobile controls, and geometry behavior on devices. |
 | 3D/Cesium | Planned high-quality terrain globe | Cesium terrain is not currently active; do not present the oblique MapLibre camera as a terrain model. |
 | Weather | Keep provider interface; fix presentation | Mock provider returns generated values and is selected by default. Make mock status unmistakable in UI and production configuration; do not present mock forecasts as observations. |
 | Offline and PWA | Refactor | IndexedDB/service worker/sync code exists, but sync requests target GPS and other API endpoints that were not found in the current app routes. Test queue replay, tenant/session scoping, cache invalidation, and service-worker update behavior. |

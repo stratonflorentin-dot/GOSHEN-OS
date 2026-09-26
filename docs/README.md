@@ -38,7 +38,7 @@ and offline field operations — one platform, thousands of farms.
 - **Frontend:** Next.js (App Router) + React + TypeScript (strict)
 - **UI:** Tailwind CSS + shadcn/ui + Radix UI primitives
 - **Forms:** React Hook Form + Zod (Zod schemas shared client/server)
-- **Maps:** MapLibre GL JS; 2D geometry is the source-of-truth UX, with an oblique satellite camera mode for field inspection. PostGIS is the spatial data source of truth.
+- **Maps:** MapLibre GL JS; its oblique satellite mode uses MapTiler Hybrid when `NEXT_PUBLIC_MAPTILER_API_KEY` is configured, with Esri imagery as a keyless fallback. PostGIS is the spatial data source of truth.
 - **3D:** **High-quality CesiumJS scene** (Cesium ion terrain + satellite imagery) in Phase 8 behind a `Scene3DProvider` adapter; MapLibre fill-extrusion fallback when tokens are absent
 - **Database:** Neon-hosted PostgreSQL with PostGIS; pgvector where enabled
 - **Backend:** Better Auth for identity; server-side PostgreSQL through `postgres.js`; tenant access enforced by PostgreSQL RLS
@@ -72,8 +72,10 @@ Current implementation gaps and verification status are tracked in
 ## Current Implementation Notes
 
 - Farm and plot maps use MapLibre GL JS. The **3D satellite** control switches
-  to Esri World Imagery and a pitched camera; it is an oblique 3D view, not a
-  Cesium terrain globe. High-quality 3D terrain remains a later roadmap phase.
+  to high-resolution MapTiler Hybrid imagery and a pitched camera when the
+  public `NEXT_PUBLIC_MAPTILER_API_KEY` is configured; Esri imagery is the
+  keyless fallback. It is an oblique 3D view, not a Cesium terrain globe.
+  High-quality 3D terrain remains a later roadmap phase.
 - Neon/Better Auth is the deployed backend. Supabase Auth, client libraries,
   Storage, Realtime, and Edge Functions are not part of the current runtime.
 - The folder structure and roadmap documents describe the intended modular

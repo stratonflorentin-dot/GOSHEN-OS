@@ -31,29 +31,40 @@ const SATELLITE_SOURCE_ID = "goshen-satellite";
 const LABEL_SOURCE_ID = "goshen-satellite-labels";
 const LOCATION_SOURCE_ID = "goshen-current-location";
 
-const SATELLITE_STYLE: StyleSpecification = {
-  version: 8,
-  sources: {
-    [SATELLITE_SOURCE_ID]: {
-      type: "raster",
-      tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
-      tileSize: 256,
-      maxzoom: 17,
-      attribution: "Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_API_KEY?.trim();
+
+function satelliteStyle(): StyleSpecification | string {
+  if (MAPTILER_KEY) {
+    // MapTiler Hybrid combines high-resolution satellite imagery with place
+    // names and road/boundary labels in one style.
+    return `https://api.maptiler.com/maps/hybrid/style.json?key=${encodeURIComponent(MAPTILER_KEY)}`;
+  }
+
+  // Keep a usable map when a deployment has not been given a MapTiler key.
+  return {
+    version: 8,
+    sources: {
+      [SATELLITE_SOURCE_ID]: {
+        type: "raster",
+        tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+        tileSize: 256,
+        maxzoom: 19,
+        attribution: "Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+      },
+      [LABEL_SOURCE_ID]: {
+        type: "raster",
+        tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"],
+        tileSize: 256,
+        maxzoom: 19,
+        attribution: "",
+      },
     },
-    [LABEL_SOURCE_ID]: {
-      type: "raster",
-      tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"],
-      tileSize: 256,
-      maxzoom: 17,
-      attribution: "",
-    },
-  },
-  layers: [
-    { id: "goshen-satellite", type: "raster", source: SATELLITE_SOURCE_ID },
-    { id: "goshen-satellite-labels", type: "raster", source: LABEL_SOURCE_ID },
-  ],
-};
+    layers: [
+      { id: "goshen-satellite", type: "raster", source: SATELLITE_SOURCE_ID },
+      { id: "goshen-satellite-labels", type: "raster", source: LABEL_SOURCE_ID },
+    ],
+  };
+}
 
 function streetStyle(dark: boolean): StyleSpecification {
   if (!dark) {
@@ -198,6 +209,7 @@ export default function MapLibreMap({
       style: streetStyle(dark),
       center: [startCenter[1], startCenter[0]],
       zoom,
+      maxZoom: 22,
       pitch: 0,
       cooperativeGestures: true,
     });
@@ -273,14 +285,14 @@ export default function MapLibreMap({
     if (!map) return;
     const next = !view3d;
     const dark = document.documentElement.classList.contains("dark");
-    map.setStyle(next ? SATELLITE_STYLE : streetStyle(dark));
+    map.setStyle(next ? satelliteStyle() : streetStyle(dark));
     map.once("style.load", () => {
       addOperationalLayers(map);
       (map.getSource(SOURCE_ID) as GeoJSONSource).setData(boundaryCollection(polygons));
       (map.getSource(LOCATION_SOURCE_ID) as GeoJSONSource).setData(locationCollection(currentLocation));
       if (next) {
-        // Use a pitched MapLibre camera over satellite imagery, matching the
-        // interaction pattern in Calvary Connect without a metered map key.
+        // Use a pitched MapLibre camera over satellite imagery, with hybrid
+        // labels when MapTiler is configured.
         map.easeTo({ pitch: 58, bearing: -18, duration: 700 });
       } else {
         map.easeTo({ pitch: 0, bearing: 0, duration: 700 });
