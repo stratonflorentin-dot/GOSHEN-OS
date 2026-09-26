@@ -10,6 +10,9 @@ export function middleware(request: NextRequest) {
   const hasSession = getSessionCookie(request);
   const { pathname } = request.nextUrl;
 
+  // The local-first workspace at / is available without an account.
+  if (pathname === "/") return NextResponse.next();
+
   if (!hasSession) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
