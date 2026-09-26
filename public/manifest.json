@@ -1,0 +1,8 @@
+{
+  "name": "GOSHEN OS",
+  "short_name": "GOSHEN OS",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#14211a"
+}
