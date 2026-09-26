@@ -142,18 +142,34 @@ export async function getFarmKpis(
       // Crops
       db`
         select
-          count(*) filter (where cs.status in ('planted','active','flowering','fruiting'))::int as active_crop_seasons,
+          count(*) filter (where cs.status in ('planted','growing'))::int as active_crop_seasons,
           coalesce(sum(cs.area_m2), 0)::numeric / 10000 as total_planted_hectares,
           coalesce(sum(h.quantity), 0)::numeric as total_harvested_kg,
           coalesce(sum(h.total_value), 0)::numeric as total_crop_revenue,
-          coalesce(sum(
-            coalesce(lr.total_cost, 0) + coalesce(eu.total_cost, 0) + coalesce(ir.total_cost, 0)
-          ), 0)::numeric as total_crop_cost
+          coalesce(sum(coalesce(cs.seed_cost, 0) + coalesce(inp.total_cost, 0) + coalesce(lr.total_cost, 0) + coalesce(eu.total_cost, 0) + coalesce(ir.total_cost, 0)), 0)::numeric as total_crop_cost
         from public.crop_seasons cs
-        left join public.harvests h on h.crop_season_id = cs.id
-        left join public.labor_records lr on lr.crop_season_id = cs.id
-        left join public.equipment_usage eu on eu.crop_season_id = cs.id
-        left join public.irrigation_records ir on ir.crop_season_id = cs.id
+        left join (
+          select crop_season_id, sum(quantity) as quantity, sum(total_value) as total_value
+          from public.harvests
+          where harvest_date between ${fromDate}::date and ${toDate}::date
+          group by crop_season_id
+        ) h on h.crop_season_id = cs.id
+        left join (
+          select crop_season_id, sum(total_cost) as total_cost from public.crop_inputs
+          where application_date between ${fromDate}::date and ${toDate}::date group by crop_season_id
+        ) inp on inp.crop_season_id = cs.id
+        left join (
+          select crop_season_id, sum(total_cost) as total_cost from public.labor_records
+          where work_date between ${fromDate}::date and ${toDate}::date group by crop_season_id
+        ) lr on lr.crop_season_id = cs.id
+        left join (
+          select crop_season_id, sum(total_cost) as total_cost from public.equipment_usage
+          where usage_date between ${fromDate}::date and ${toDate}::date group by crop_season_id
+        ) eu on eu.crop_season_id = cs.id
+        left join (
+          select crop_season_id, sum(total_cost) as total_cost from public.irrigation_records
+          where irrigation_date between ${fromDate}::date and ${toDate}::date group by crop_season_id
+        ) ir on ir.crop_season_id = cs.id
         where cs.farm_id = ${farmId}
           and (${fromDate}::date is null or cs.created_at >= ${fromDate}::date)
           and (${toDate}::date is null or cs.created_at <= ${toDate}::date)
@@ -162,15 +178,25 @@ export async function getFarmKpis(
       db`
         select
           count(*) filter (where lb.status = 'active')::int as active_batches,
-          coalesce(sum(ls.quantity * ls.unit_price), 0)::numeric as total_livestock_revenue,
-          coalesce(sum(
-            coalesce(lf.total_cost, 0) + coalesce(lh.total_cost, 0) + coalesce(lr.total_cost, 0)
-          ), 0)::numeric as total_livestock_cost
+          coalesce(sum(ls.total_revenue), 0)::numeric as total_livestock_revenue,
+          coalesce(sum(coalesce(lf.total_cost, 0) + coalesce(lh.total_cost, 0) + coalesce(lr.total_cost, 0)), 0)::numeric as total_livestock_cost
         from public.livestock_batches lb
-        left join public.livestock_sales ls on ls.livestock_batch_id = lb.id
-        left join public.livestock_feed lf on lf.livestock_batch_id = lb.id
-        left join public.livestock_health lh on lh.livestock_batch_id = lb.id
-        left join public.labor_records lr on lr.livestock_batch_id = lb.id
+        left join (
+          select batch_id, sum(total_revenue) as total_revenue from public.livestock_sales
+          where sale_date between ${fromDate}::date and ${toDate}::date group by batch_id
+        ) ls on ls.batch_id = lb.id
+        left join (
+          select batch_id, sum(total_cost) as total_cost from public.livestock_feed
+          where feed_date between ${fromDate}::date and ${toDate}::date group by batch_id
+        ) lf on lf.batch_id = lb.id
+        left join (
+          select batch_id, sum(cost) as total_cost from public.livestock_health
+          where record_date between ${fromDate}::date and ${toDate}::date group by batch_id
+        ) lh on lh.batch_id = lb.id
+        left join (
+          select livestock_batch_id, sum(total_cost) as total_cost from public.labor_records
+          where work_date between ${fromDate}::date and ${toDate}::date group by livestock_batch_id
+        ) lr on lr.livestock_batch_id = lb.id
         where lb.farm_id = ${farmId}
           and (${fromDate}::date is null or lb.created_at >= ${fromDate}::date)
           and (${toDate}::date is null or lb.created_at <= ${toDate}::date)
@@ -178,14 +204,14 @@ export async function getFarmKpis(
       // Finance
       db`
         select
-          coalesce(sum(amount) filter (where type = 'revenue'), 0)::numeric as total_revenue,
-          coalesce(sum(amount) filter (where type = 'expense'), 0)::numeric as total_expenses,
-          coalesce(sum(amount) filter (where type = 'revenue'), 0)::numeric -
-          coalesce(sum(amount) filter (where type = 'expense'), 0)::numeric as net_profit
+          coalesce(sum(jl.credit - jl.debit) filter (where a.account_type = 'revenue'), 0)::numeric as total_revenue,
+          coalesce(sum(jl.debit - jl.credit) filter (where a.account_type in ('expense', 'cost_of_goods_sold')), 0)::numeric as total_expenses,
+          coalesce(sum(jl.credit - jl.debit) filter (where a.account_type = 'revenue'), 0)::numeric -
+          coalesce(sum(jl.debit - jl.credit) filter (where a.account_type in ('expense', 'cost_of_goods_sold')), 0)::numeric as net_profit
         from public.journal_lines jl
-        join public.journal_entries je on je.id = jl.journal_entry_id
+        join public.journal_entries je on je.id = jl.entry_id
         join public.accounts a on a.id = jl.account_id
-        where je.farm_id = ${farmId}
+        where jl.farm_id = ${farmId}
           and je.status = 'posted'
           and (${fromDate}::date is null or je.entry_date >= ${fromDate}::date)
           and (${toDate}::date is null or je.entry_date <= ${toDate}::date)
@@ -193,11 +219,12 @@ export async function getFarmKpis(
       // Inventory value + low stock
       db`
         select
-          coalesce(sum(b.quantity * i.unit_cost), 0)::numeric as inventory_value,
-          count(*) filter (where b.quantity <= i.reorder_level and i.reorder_level > 0)::int as low_stock_items
+          coalesce(sum(b.quantity * coalesce(b.avg_unit_cost, 0)), 0)::numeric as inventory_value,
+          count(*) filter (where b.quantity <= coalesce(i.reorder_point, i.min_stock_level, 0) and coalesce(i.reorder_point, i.min_stock_level, 0) > 0)::int as low_stock_items
         from public.inventory_balances b
         join public.inventory_items i on i.id = b.item_id
-        where i.farm_id = ${farmId} and b.quantity > 0
+        join public.inventory_locations il on il.id = b.location_id
+        where il.farm_id = ${farmId} and b.quantity > 0
       `,
       // Labor
       db`
@@ -408,27 +435,34 @@ export async function getLivestockBatchPerformance(
     const rows = await db`
       select
         lb.id as batch_id,
-        lb.name as batch_name,
+        lb.batch_code as batch_name,
         ls.name as species,
         lb.initial_quantity as initial_count,
         lb.current_quantity as current_count,
         case when lb.initial_quantity > 0
-          then round((lb.initial_quantity - lb.current_quantity)::numeric / lb.initial_quantity * 100, 2)
+          then round(lb.mortality_count::numeric / lb.initial_quantity * 100, 2)
           else 0 end as mortality_rate,
-        coalesce(sum(lf.quantity_kg), 0)::numeric as feed_consumed_kg,
-        coalesce(sum(lf.total_cost), 0)::numeric as feed_cost,
-        coalesce(sum(
-          coalesce(lf.total_cost, 0) + coalesce(lh.total_cost, 0) + coalesce(lr.total_cost, 0)
-        ), 0)::numeric as total_cost,
-        coalesce(sum(ls2.quantity * ls2.unit_price), 0)::numeric as total_revenue
+        coalesce(lf.quantity_kg, 0)::numeric as feed_consumed_kg,
+        coalesce(lf.total_cost, 0)::numeric as feed_cost,
+        (coalesce(lf.total_cost, 0) + coalesce(lh.total_cost, 0) + coalesce(lr.total_cost, 0))::numeric as total_cost,
+        coalesce(ls2.total_revenue, 0)::numeric as total_revenue
       from public.livestock_batches lb
-      join public.livestock_species ls on ls.id = lb.species_id
-      left join public.livestock_feed lf on lf.livestock_batch_id = lb.id
-      left join public.livestock_health lh on lh.livestock_batch_id = lb.id
-      left join public.labor_records lr on lr.livestock_batch_id = lb.id
-      left join public.livestock_sales ls2 on ls2.livestock_batch_id = lb.id
+      join public.livestock_groups lg on lg.id = lb.group_id
+      join public.livestock_species ls on ls.id = lg.species_id
+      left join (
+        select batch_id, sum(quantity_kg) as quantity_kg, sum(total_cost) as total_cost
+        from public.livestock_feed group by batch_id
+      ) lf on lf.batch_id = lb.id
+      left join (
+        select batch_id, sum(cost) as total_cost from public.livestock_health group by batch_id
+      ) lh on lh.batch_id = lb.id
+      left join (
+        select livestock_batch_id, sum(total_cost) as total_cost from public.labor_records group by livestock_batch_id
+      ) lr on lr.livestock_batch_id = lb.id
+      left join (
+        select batch_id, sum(total_revenue) as total_revenue from public.livestock_sales group by batch_id
+      ) ls2 on ls2.batch_id = lb.id
       where lb.farm_id = ${farmId}
-      group by lb.id, lb.name, ls.name, lb.initial_quantity, lb.current_quantity
       order by total_revenue desc
     `;
 
