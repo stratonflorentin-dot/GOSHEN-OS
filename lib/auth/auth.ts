@@ -33,7 +33,6 @@ export const auth = betterAuth({
     requireEmailVerification: false, // Disable email verification for now
   },
   advanced: {
-    disableCsrf: true, // Disable CSRF for API routes
     useSchema: true, // Use the configured schema
   },
 });
