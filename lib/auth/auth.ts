@@ -26,8 +26,8 @@ const mailFrom = process.env.MAIL_FROM ?? "GOSHEN OS <no-reply@goshen-os.local>"
 export const auth = betterAuth({
   database: sql,
   databaseSchema: "neon_auth",
-  baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
-  secret: process.env.BETTER_AUTH_SECRET,
+  baseURL: process.env.BETTER_AUTH_URL ?? process.env.VERCEL_URL ?? "http://localhost:3000",
+  secret: process.env.BETTER_AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: Boolean(process.env.SMTP_HOST),

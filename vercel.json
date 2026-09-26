@@ -1,4 +1,5 @@
 {
+  "name": "goshen-os",
   "buildCommand": "npx next build --webpack",
   "devCommand": "npx next dev",
   "installCommand": "npm install",
