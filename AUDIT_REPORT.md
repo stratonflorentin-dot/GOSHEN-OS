@@ -6,12 +6,13 @@
 
 ## Scope and evidence
 
-This is a repository review, live page inspection, and targeted database verification. Production `/register` reflects the updated form and invalid signup payloads are rejected without writing an account. A valid live signup/session has not been exercised. Migration 0009 is applied to the configured development and production databases. Tenant-isolation verification passes its two-tenant checks on the configured development database, including anonymous isolation, tenant reads/writes, privilege escalation, and append-only policies. GeoJSON parsing was checked against configured PostGIS and corrected to supported function signatures. Seven Vitest unit tests pass. No automated desktop/tablet/mobile browser matrix exists, so responsive behavior and phone workflows are not certified.
+This is a repository review, live page inspection, and targeted database verification. Live signup, signin, session persistence, and logout pass against the public Vercel URL. The authenticated `/dashboard` still returns 500: Vercel logs show profile creation fails because the profile foreign key and auth user are on mismatched database state. Migration 0009 was applied to the configured development and `.env.production` databases, but Vercel's `DATABASE_URL_APP` is a Secret and its actual target could not be verified through the CLI. Do not consider account onboarding complete until both Vercel database URLs target the same database and branch and the public dashboard succeeds. Tenant-isolation verification passes its two-tenant checks on the configured development database, including anonymous isolation, tenant reads/writes, privilege escalation, and append-only policies. GeoJSON parsing was checked against configured PostGIS and corrected to supported function signatures. Seven Vitest unit tests pass. No automated desktop/tablet/mobile browser matrix exists, so responsive behavior and phone workflows are not certified.
 
 ## What exists
 
 - Next.js App Router application with React, TypeScript, Tailwind, and a small shared UI component set.
-- Anonymous local-first workspace at `/`, with records stored in browser `localStorage` and a downloadable backup.
+- Account-first product landing page at `/`; authenticated users are directed to `/dashboard`
+- Secondary anonymous local-first workspace at `/workspace`, with records stored in browser `localStorage` and a downloadable backup.
 - Separate database-backed app routes for dashboard, farms, onboarding, plots, crops, livestock, inventory, finance, analytics, weather, maps, and a 3D map view.
 - Better Auth email/password routes and API handler, PostgreSQL accessed through `postgres.js`, and PostGIS migrations.
 - Organization, membership, farm, profile, invitation, role, and permission tables; organization/farm ownership columns and RLS policies across domain migrations.
@@ -22,7 +23,7 @@ This is a repository review, live page inspection, and targeted database verific
 
 | Area | Decision | Evidence / next action |
 | --- | --- | --- |
-| Existing local workspace and backup | Keep | Useful no-account entry point; explain clearly that it is device-only and is not synced to a farm account. |
+| Existing local workspace and backup | Keep as secondary trial | Available at `/workspace`; explain clearly that it is device-only and is not synced to a farm account. |
 | Better Auth with PostgreSQL | Refactor | Kysely Postgres.js dialect and explicit schema/field mappings are deployed. The current Better Auth user table is `auth.user`. |
 | Authentication schema | Refactor | Migration 0008 and explicit Better Auth field mappings align the current `auth` schema; migration 0009 aligns the profile foreign key. Both migrations were applied in schema-only mode to the configured production database. |
 | Organization and farm schema/RLS | Keep, then verify | PostgreSQL migrations define tenant policies. The focused two-tenant RLS verification now passes against configured development; the complete policy matrix and assigned-farm role matrix still need coverage. |
@@ -36,7 +37,7 @@ This is a repository review, live page inspection, and targeted database verific
 
 ### Functional by source inspection
 
-- The root workspace renders without login and stores records locally.
+- The public root presents account creation/sign-in and directs authenticated users to `/dashboard`; `/workspace` retains the local-only workspace.
 - Auth pages call Better Auth email/password APIs; the auth catch-all route forwards GET/POST requests.
 - Database-backed route handlers/pages call server-side session helpers, and app pages are gated by a session-cookie check in `proxy.ts`.
 - The migration set creates PostGIS geography/geometry-backed farm and plot structures and declares tenant RLS policies.
@@ -44,10 +45,9 @@ This is a repository review, live page inspection, and targeted database verific
 
 ### Broken or high-confidence defects
 
-- **Signup previously failed:** the unsupported database adapter and mismatched auth schema have been corrected and deployed. A second onboarding blocker was found: `profiles.id` referenced retired `neon_auth.user`. Migration 0009 now points it at `auth.user` on configured development and production databases.
-- The live signup API rejected the canonical site origin because `BETTER_AUTH_URL` in the configured production environment points at a deployment-specific Vercel hostname. The stable production hostname has now been added as an explicit trusted origin; rerun the disposable live lifecycle test after deployment.
-- Production-mode signup probing also found that the Kysely adapter needs explicit `auth.*` model names and UUID ID generation to match the existing schema. Both settings are now added; verify again after deployment.
-- A local production build connected to the configured production database now passes signup, session read, dashboard/profile creation, signout, signin, and session read. The disposable account was deleted. The final schema/model-name fix still needs to deploy before repeating the same check through the public Vercel URL.
+- **Live dashboard profile creation fails:** signup/session endpoints work, but `/dashboard` fails when inserting the profile. Runtime logs show an auth user missing from the database behind the profile foreign key. Vercel's production `DATABASE_URL_APP` target is a Secret and could not be inspected. Align production URLs to one database and branch, apply migrations there, and retest.
+- The initial signup origin and Better Auth schema/model mismatches were corrected. The canonical production hostname is trusted, auth models explicitly target `auth.*`, and IDs use UUID generation. Live signup/signin/session/logout requests now pass.
+- A local production build connected to the configured production database passed signup, session read, dashboard/profile creation, signout, signin, and session read; the disposable account was deleted. That is separate from and does not verify Vercel's runtime database connection.
 - **Signup success UX was wrong:** email verification is disabled, but signup sent the user to a page instructing them to check email. It now routes to `/dashboard` and catches network exceptions in the working tree.
 - **Signup surfaced backend messages:** detailed auth/database errors could be shown in the browser. The updated signup maps known input errors and returns a safe generic message for other failures.
 - The initial `npm run test:unit` failed because Vitest was missing; Vitest and seven focused tests have now been added and pass. They do not replace database/RLS or end-to-end coverage.
@@ -56,7 +56,7 @@ This is a repository review, live page inspection, and targeted database verific
 
 ### Partial / not verified end-to-end
 
-- Signup/signin/session persistence, password reset, account recovery, and organization onboarding.
+- Live dashboard/profile bootstrap and organization onboarding; signup/signin/session/logout API lifecycle passes, but full account-to-farm onboarding remains unverified.
 - RLS coverage for all tables and the required Organization A/B and assigned-farm isolation scenarios.
 - Farm boundary capture validation, polygon editing/import, and persistence through PostGIS.
 - Inventory movement/cost allocation, finance totals, harvest/sale accounting, and the product-wide crop/livestock chains.
@@ -73,7 +73,7 @@ This is a repository review, live page inspection, and targeted database verific
 
 - Local browser records are device-specific and are not a server backup. Users can lose data with browser storage clearing or device loss.
 - The service worker caches selected authenticated analytics GET routes. Review Cache Storage isolation, sign-out clearing, tenant/account switching, and stale data risks before enabling multi-tenant offline use.
-- `DATABASE_URL_APP` is mandatory in production by `lib/db`; development can fall back to the owner URL and logs that RLS is bypassed. Keep that fallback development-only.
+- `DATABASE_URL_APP` is mandatory in production by `lib/db`; it must target the same database and branch as `DATABASE_URL`, using a non-owner role. Development can fall back to the owner URL and logs that RLS is bypassed. Keep that fallback development-only.
 - Auth writes use the owner database client. Restrict the auth schema/table grants and keep that credential server-only.
 - Review error responses for every server action/API for leakage of SQL/provider details; signup has been sanitized in the current patch, but this is not a system-wide error audit.
 - `.env.production` is untracked in this workspace and was deliberately left untouched; never add it to Git. Audit only environment variable names in source, not secret values.
@@ -89,15 +89,15 @@ This is a repository review, live page inspection, and targeted database verific
 
 ## UX and mobile findings
 
-- The anonymous home page is clear about device-only storage and offers a backup, but it is not equivalent to cloud-backed farm management.
-- A live registration page was reachable and showed a creation error. The revised page provides a safe error state and directs successful signups into the authenticated dashboard.
+- The public home page now prioritizes cloud account access; `/workspace` retains the device-only workspace and clearly labels its storage boundary.
+- Live signup/signin/session/logout API requests pass. Dashboard onboarding remains blocked by the production database mismatch above.
 - Desktop/tablet/mobile workflows were not exhaustively exercised in this audit. A phone-oriented bottom-navigation and field workflow must be verified at narrow viewport sizes with real GPS permissions and offline transitions.
 
 ## Integrations and environment variables
 
 Variables referenced by source: `DATABASE_URL`, `DATABASE_URL_APP`, `BETTER_AUTH_SECRET`, `NEXTAUTH_SECRET`, `BETTER_AUTH_URL`, `VERCEL_URL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`, `WEATHER_PROVIDER`, `OPENWEATHER_API_KEY`, `CESIUM_ION_TOKEN`, and `CESIUM_TERRAIN_TOKEN`. Migration scripts also reference `DATABASE_URL_UNPOOLED` and `GOSHEN_APP_DB_PASSWORD`.
 
-Add descriptions and production/development requirements to `.env.example`; verify deployment values in the host dashboard without copying values into the repository. Mock weather must be visibly labeled if used.
+`.env.example` describes required and optional values without secrets. Production `DATABASE_URL_APP` must use the same database and branch as `DATABASE_URL`, with a non-owner role. Mock weather must be visibly labeled if used.
 
 ## Tooling and verification results
 
@@ -106,17 +106,17 @@ Add descriptions and production/development requirements to `.env.example`; veri
 - `npm run build` (default Turbopack): blocked on this Windows workspace because the installed Next SWC native binding is not a valid Win32 application; the Webpack build succeeded as a verification alternative.
 - `npm run test:unit`: passed (2 files, 7 tests).
 - `npm run lint`: no lint script is configured. ESLint config and rule coverage need a separate review.
-- Live production `/` and `/register` opened read-only before and after push; new registration markup is visible. No signup submission, user DB write, or mobile/tablet viewport run was performed.
+- Live production `/` and `/register` opened read-only before and after push; new registration markup is visible. Signup/signin/session/logout APIs were exercised; dashboard returned 500 during profile creation. Mobile/tablet viewport behavior was not exhaustively tested.
 
 ## Recommended order
 
-1. Deploy and apply the signup adapter/schema fix; verify registration, sign-in, session, and duplicate-email behavior on a non-production test account.
+1. Align Vercel production database URLs to the same database and branch, apply required migrations, and verify dashboard profile creation with a disposable account.
 2. Install test infrastructure and add auth, validation, geometry, calculations, and RLS isolation tests.
-3. Reconcile local-first root data with authenticated organization/farm onboarding; choose explicit import/sync/backup semantics.
+3. Reconcile local workspace data with authenticated organization/farm onboarding; choose explicit import/sync/backup semantics.
 4. Audit every tenant table, policy, server action, API, and database role; run Organization A/B isolation checks on a disposable database.
 5. Complete a single farm/plot/crop/activity/inventory/expense/harvest/sale vertical workflow, then livestock/feed/health/sale.
 6. Fix or disable offline sync paths with no server endpoint; test tenant-scoped cache and sync conflict handling.
 7. Verify mobile GPS boundary capture and tablet/desktop flows on actual viewport sizes and devices.
 8. Add production integration health/status surfaces, environment docs, export workflows, operational monitoring, and a repeatable deployment checklist.
 
-This report describes the reviewed state and the local signup patch. It does not certify production signup, tenant isolation, or the full commercial definition of done.
+This report describes the reviewed state and the local signup patch. It does not certify Vercel dashboard onboarding, complete tenant isolation, responsive field workflows, or the full commercial definition of done.

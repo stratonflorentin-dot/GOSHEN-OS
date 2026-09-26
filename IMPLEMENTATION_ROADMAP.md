@@ -13,7 +13,7 @@ The product brief defines a multi-tenant commercial platform. Deliver it as test
 - [x] Map Better Auth to explicit `auth.*` table names and generate UUID identifiers to match the deployed schema.
 - [x] Verify signup, signin, session persistence, dashboard profile creation, and logout against the configured production database using a local production build; remove the disposable account afterward.
 - [x] Push and confirm the updated registration page markup is visible on the live site.
-- [ ] Verify account creation and session creation with a disposable live test account.
+- [x] Verify account creation and session creation with a disposable live test account; remove it after the API lifecycle check.
 - [ ] Verify a disposable account can sign up, sign in, retain a session, and sign out on the live deployment.
 
 ## Stage 1 — Verification foundation
@@ -24,12 +24,12 @@ The product brief defines a multi-tenant commercial platform. Deliver it as test
 - [ ] Add lint script/config and CI checks for typecheck, unit tests, build, and migration checks.
 - [ ] Resolve duplicate `0006` migration prefixes and document the actual migration ledger.
 - [ ] Replace/deprecate the legacy auth migration script; avoid secret/role changes as an incidental effect of schema deployment.
-- [ ] Add `.env.example` with descriptions, required/optional status, and no secret values.
+- [x] Add `.env.example` with descriptions, required/optional status, and no secret values.
 
 ## Stage 2 — One account-to-farm journey
 
-- [ ] Define a clear anonymous trial versus cloud account boundary.
-- [ ] Implement account signup/signin/password recovery/logout and session lifecycle.
+- [x] Define initial boundary: public home offers cloud account access; device-only workspace is at `/workspace` and labeled.
+- [ ] Complete account lifecycle end to end: live API signup/signin/session/logout pass; profile bootstrap fails due production database mismatch.
 - [ ] Build organization creation and first-farm onboarding; remove any assumptions tied to one demonstration farm.
 - [ ] Offer an explicit, validated import path from local workspace backup to a cloud farm; do not silently mix local and server records.
 - [ ] Test organization/farm creation and empty/loading/error states on mobile and desktop.

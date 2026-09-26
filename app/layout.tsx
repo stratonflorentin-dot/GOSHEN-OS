@@ -6,8 +6,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "GOSHEN OS | Farm Operations",
-  description: "A simple workspace to keep farm operations and records together.",
+  title: "GOSHEN OS | Agricultural Operations",
+  description: "Manage your agricultural organization, farms, field operations, inventory, and finances in one workspace.",
   manifest: "/manifest.json",
 };
 
