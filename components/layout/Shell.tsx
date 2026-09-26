@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   LayoutDashboard, Map, Sprout, Beef, Boxes, Wallet, Cloud, BarChart3,
-  Leaf, LogOut, Home, Plus, ChevronDown, Grid2x2, type LucideIcon,
+  Leaf, LogOut, Home, Plus, Grid2x2, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth/client";
@@ -70,7 +70,7 @@ function AddSheet({ onClose }: { onClose: () => void }) {
         onClick={onClose}
         className="absolute inset-0 bg-black/40"
       />
-      <div className="absolute inset-x-0 bottom-0 rounded-t-3xl bg-white p-5 pb-8 shadow-2xl">
+      <div className="absolute inset-x-0 bottom-0 max-h-[90dvh] overflow-y-auto rounded-t-3xl bg-white p-5 pb-8 shadow-2xl">
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-black/10" />
         <h2 className="mb-3 text-base font-semibold">Quick actions</h2>
         <div className="grid grid-cols-2 gap-3">
@@ -186,12 +186,11 @@ export function Shell({
 
           <div className="ml-auto flex items-center gap-1.5">
             {/* Org selector (mobile) */}
-            {orgName && (
-            <div className="hidden max-w-[180px] items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground sm:flex lg:hidden">
-                <span className="truncate">{orgName}</span>
-                <ChevronDown className="h-4 w-4 shrink-0" />
-            </div>
-            )}
+            {orgName && <div title={orgName} className="hidden max-w-[180px] rounded-lg bg-[#f4f7f3] px-2.5 py-1.5 text-xs font-medium text-muted-foreground sm:block lg:hidden"><span className="block truncate">{orgName}</span></div>}
+
+            <button onClick={signOut} aria-label="Sign out" title="Sign out" className="grid h-9 w-9 place-items-center rounded-full bg-primary-100 text-sm font-semibold text-primary-700 hover:bg-primary-200 lg:hidden">
+              {(userName || "U").slice(0, 1).toUpperCase()}
+            </button>
 
             {/* Account (desktop) */}
             <div className="hidden items-center gap-1 lg:flex">

@@ -30,6 +30,7 @@ export default function Workspace() {
   const [type, setType] = useState<Exclude<Section, "Overview">>("Farms");
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [today, setToday] = useState("");
 
   useEffect(() => {
     try {
@@ -39,6 +40,7 @@ export default function Workspace() {
         if (Array.isArray(parsed)) setRecords(parsed as RecordItem[]);
       }
     } catch { /* Start with a clean workspace if stored data is unreadable. */ }
+    setToday(new Intl.DateTimeFormat("en", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date()));
     setReady(true);
   }, []);
   useEffect(() => {
@@ -62,13 +64,17 @@ export default function Workspace() {
     setRecords((old) => [{ id: crypto.randomUUID(), type, name: value, detail: detail.trim(), amount: amount ? Number(amount) : undefined, createdAt: new Date().toISOString() }, ...old]);
     setName(""); setDetail(""); setAmount(""); setAdding(false);
   }
+  function changeSection(next: Section) {
+    setSection(next);
+    setQuery("");
+    setMenuOpen(false);
+  }
   function exportData() {
     const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), records }, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob); const anchor = document.createElement("a");
     anchor.href = url; anchor.download = "goshen-workspace-backup.json"; anchor.click(); URL.revokeObjectURL(url);
   }
 
-  const today = new Intl.DateTimeFormat("en", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
   return (
     <div className="min-h-screen bg-[#f5f7f4] pb-24 text-[#1c2921] md:pb-0">
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-[252px] flex-col border-r border-[#e7ebe6] bg-white px-5 py-6 lg:flex">
@@ -91,18 +97,18 @@ export default function Workspace() {
       <main className="min-h-screen lg:ml-[252px]">
         <header className="sticky top-0 z-10 flex h-[68px] items-center justify-between border-b border-[#e7ebe6] bg-white/95 px-5 backdrop-blur sm:px-8">
           <div className="flex items-center gap-3">
-            <button className="rounded-lg p-2 text-[#66746b] lg:hidden" onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle navigation"><Menu className="h-5 w-5" /></button>
+            <button className="rounded-lg p-2 text-[#66746b] lg:hidden" onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle navigation" aria-expanded={menuOpen}><Menu className="h-5 w-5" /></button>
             <div className="hidden items-center gap-2 text-xs text-[#89948c] sm:flex"><span>Workspace</span><span>/</span><span className="font-semibold text-[#34443a]">{section}</span></div>
             <div className="flex items-center gap-2 font-bold tracking-[.1em] lg:hidden"><Leaf className="h-4 w-4 text-[#35764c]"/>GOSHEN</div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <span className="hidden text-xs text-[#8a958d] md:block">{today}</span>
-            <button onClick={exportData} title="Download workspace backup" className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e5eae5] px-3 text-xs font-semibold text-[#47564b] hover:bg-[#f5f7f4]"><ArrowDownToLine className="h-4 w-4"/><span className="hidden sm:block">Backup</span></button>
-            <button onClick={() => { setType(section === "Overview" ? "Farms" : section); setAdding(true); }} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#174c35] px-3.5 text-xs font-semibold text-white shadow-sm hover:bg-[#103e2a]"><Plus className="h-4 w-4"/>Add record</button>
+            <button onClick={exportData} title="Download workspace backup" aria-label="Download workspace backup" className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e5eae5] px-3 text-xs font-semibold text-[#47564b] hover:bg-[#f5f7f4]"><ArrowDownToLine className="h-4 w-4"/><span className="hidden sm:block">Backup</span></button>
+            <button onClick={() => { setType(section === "Overview" ? "Farms" : section); setAdding(true); }} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#174c35] px-3.5 text-xs font-semibold text-white shadow-sm hover:bg-[#103e2a]"><Plus className="h-4 w-4"/><span className="hidden min-[360px]:inline">Add record</span><span className="min-[360px]:hidden">Add</span></button>
           </div>
         </header>
 
-        {menuOpen && <nav className="absolute z-20 w-full border-b border-[#e7ebe6] bg-white p-3 shadow-lg lg:hidden">{sections.map(({name: item, icon: Icon}) => <button key={item} onClick={() => {setSection(item); setMenuOpen(false);}} className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm"><Icon className="h-4 w-4"/>{item}</button>)}</nav>}
+        {menuOpen && <nav className="absolute z-20 w-full border-b border-[#e7ebe6] bg-white p-3 shadow-lg lg:hidden" aria-label="Workspace sections">{sections.map(({name: item, icon: Icon}) => <button key={item} onClick={() => changeSection(item)} aria-current={section === item ? "page" : undefined} className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm"><Icon className="h-4 w-4"/>{item}</button>)}</nav>}
         <div className="mx-auto max-w-[1320px] px-5 py-7 sm:px-8 sm:py-9">
           <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div><div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[.16em] text-[#65806d]"><span className="h-1.5 w-1.5 rounded-full bg-[#4c9a64]"/>Farm management</div><h1 className="text-[26px] font-semibold tracking-tight sm:text-[30px]">{section === "Overview" ? "Good day. Here’s your farm." : section}</h1><p className="mt-1.5 text-sm text-[#7d8981]">A clear view of your operation, all in one place.</p></div>
@@ -144,16 +150,16 @@ export default function Workspace() {
       </main>
 
       <nav aria-label="Workspace navigation" className="fixed inset-x-4 bottom-[max(12px,env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-[440px] items-center justify-around rounded-2xl border border-white/10 bg-[#14271c] px-2 py-2 text-white shadow-[0_12px_34px_rgba(12,31,19,.28)] md:hidden">
-        <MobileNav icon={BarChart3} label="Home" active={section === "Overview"} onClick={() => setSection("Overview")} />
-        <MobileNav icon={Map} label="Fields" active={section === "Farms"} onClick={() => setSection("Farms")} />
+        <MobileNav icon={BarChart3} label="Home" active={section === "Overview"} onClick={() => changeSection("Overview")} />
+        <MobileNav icon={Map} label="Fields" active={section === "Farms"} onClick={() => changeSection("Farms")} />
         <button onClick={() => {setType(section === "Overview" ? "Farms" : section); setAdding(true);}} aria-label="Add farm record" className="grid h-11 w-11 place-items-center rounded-xl bg-[#87b744] text-[#193322] shadow-md"><Plus className="h-5 w-5"/></button>
-        <MobileNav icon={Sprout} label="Crops" active={section === "Crops"} onClick={() => setSection("Crops")} />
-        <MobileNav icon={FileSpreadsheet} label="Finance" active={section === "Finance"} onClick={() => setSection("Finance")} />
+        <MobileNav icon={Sprout} label="Crops" active={section === "Crops"} onClick={() => changeSection("Crops")} />
+        <MobileNav icon={FileSpreadsheet} label="Finance" active={section === "Finance"} onClick={() => changeSection("Finance")} />
       </nav>
 
-      {adding && <div className="fixed inset-0 z-50 grid place-items-center bg-[#102318]/40 p-4" onMouseDown={(e) => {if (e.target === e.currentTarget) setAdding(false);}}><form onSubmit={addRecord} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><div className="text-[10px] font-bold uppercase tracking-[.16em] text-[#65806d]">New entry</div><h2 className="mt-1 text-lg font-semibold">Add a farm record</h2></div><button type="button" onClick={() => setAdding(false)} aria-label="Close" className="rounded-lg p-1 text-[#829087] hover:bg-[#f2f5f1]"><X className="h-5 w-5"/></button></div>
-        <label className="mt-5 block text-xs font-semibold">Record type<select value={type} onChange={(e) => setType(e.target.value as typeof type)} className="mt-1.5 h-10 w-full rounded-lg border border-[#e2e8e1] bg-white px-3 text-sm">{sections.slice(1).map((s) => <option key={s.name}>{s.name}</option>)}</select></label>
-        <label className="mt-4 block text-xs font-semibold">Name<input autoFocus required value={name} onChange={(e) => setName(e.target.value)} placeholder={type === "Farms" ? "e.g. North field" : `e.g. ${type} entry`} className="mt-1.5 h-10 w-full rounded-lg border border-[#e2e8e1] px-3 text-sm outline-none focus:border-[#3d8055]"/></label>
+      {adding && <div className="fixed inset-0 z-50 grid place-items-center bg-[#102318]/45 p-3 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="record-dialog-title" onKeyDown={(e) => {if (e.key === "Escape") setAdding(false);}} onMouseDown={(e) => {if (e.target === e.currentTarget) setAdding(false);}}><form onSubmit={addRecord} className="max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:p-6"><div className="flex items-start justify-between"><div><div className="text-[10px] font-bold uppercase tracking-[.16em] text-[#65806d]">New entry</div><h2 id="record-dialog-title" className="mt-1 text-lg font-semibold">Add a farm record</h2></div><button type="button" onClick={() => setAdding(false)} aria-label="Close" className="rounded-lg p-1 text-[#829087] hover:bg-[#f2f5f1]"><X className="h-5 w-5"/></button></div>
+        <label className="mt-5 block text-xs font-semibold">Record type<select value={type} onChange={(e) => setType(e.target.value as typeof type)} className="mt-1.5 h-11 w-full rounded-lg border border-[#e2e8e1] bg-white px-3 text-sm">{sections.slice(1).map((s) => <option key={s.name}>{s.name}</option>)}</select></label>
+        <label className="mt-4 block text-xs font-semibold">Name<input autoFocus required value={name} onChange={(e) => setName(e.target.value)} placeholder={type === "Farms" ? "e.g. North field" : `e.g. ${type} entry`} className="mt-1.5 h-11 w-full rounded-lg border border-[#e2e8e1] px-3 text-sm outline-none focus:border-[#3d8055]"/></label>
         <label className="mt-4 block text-xs font-semibold">Notes <span className="font-normal text-[#929d95]">(optional)</span><textarea value={detail} onChange={(e) => setDetail(e.target.value)} rows={3} placeholder="Add a useful detail..." className="mt-1.5 w-full resize-none rounded-lg border border-[#e2e8e1] px-3 py-2 text-sm outline-none focus:border-[#3d8055]"/></label>
         {type === "Finance" && <label className="mt-4 block text-xs font-semibold">Amount<input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" className="mt-1.5 h-10 w-full rounded-lg border border-[#e2e8e1] px-3 text-sm outline-none focus:border-[#3d8055]"/></label>}
         <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setAdding(false)} className="h-10 rounded-lg px-4 text-xs font-semibold text-[#657269] hover:bg-[#f3f5f2]">Cancel</button><button type="submit" className="h-10 rounded-lg bg-[#174c35] px-4 text-xs font-semibold text-white hover:bg-[#103e2a]">Save record</button></div>
@@ -194,5 +200,5 @@ function TypeIcon({ type }: { type: RecordItem["type"] }) {
 }
 function Stat({ icon: Icon, label, value, note, tone }: { icon: typeof Activity; label: string; value: string; note: string; tone: string }) {
   const colors: Record<string, string> = { green: "bg-[#edf5ef] text-[#2b7045]", lime: "bg-[#f2f6e9] text-[#69843d]", amber: "bg-[#fbf3e5] text-[#a4772b]", blue: "bg-[#edf3f8] text-[#4f7696]" };
-  return <div className="rounded-2xl border border-[#e6ebe5] bg-white p-4 shadow-[0_2px_8px_rgba(31,53,37,.03)] sm:p-5"><div className="flex items-start justify-between"><span className="text-xs font-medium text-[#78857c]">{label}</span><span className={`grid h-8 w-8 place-items-center rounded-lg ${colors[tone]}`}><Icon className="h-4 w-4"/></span></div><div className="mt-3 text-[25px] font-semibold tracking-tight">{value}</div><div className="mt-1 text-[10px] text-[#9aa49d]">{note}</div></div>;
+  return <div className="min-w-0 rounded-2xl border border-[#e6ebe5] bg-white p-4 shadow-[0_2px_8px_rgba(31,53,37,.03)] sm:p-5"><div className="flex items-start justify-between gap-2"><span className="min-w-0 text-xs font-medium text-[#78857c]">{label}</span><span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${colors[tone]}`}><Icon className="h-4 w-4"/></span></div><div className="mt-3 truncate text-[25px] font-semibold tracking-tight" title={value}>{value}</div><div className="mt-1 text-[10px] text-[#9aa49d]">{note}</div></div>;
 }
