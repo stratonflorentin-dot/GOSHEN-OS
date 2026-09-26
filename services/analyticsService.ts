@@ -544,12 +544,12 @@ export async function getMonthlyCashFlow(
     const rows = await db`
       select
         to_char(je.entry_date, 'YYYY-MM') as month,
-        coalesce(sum(jl.amount) filter (where a.type = 'revenue'), 0)::numeric as revenue,
-        coalesce(sum(jl.amount) filter (where a.type = 'expense'), 0)::numeric as expenses
+        coalesce(sum(jl.credit - jl.debit) filter (where a.account_type = 'revenue'), 0)::numeric as revenue,
+        coalesce(sum(jl.debit - jl.credit) filter (where a.account_type in ('expense', 'cost_of_goods_sold')), 0)::numeric as expenses
       from public.journal_entries je
-      join public.journal_lines jl on jl.journal_entry_id = je.id
+      join public.journal_lines jl on jl.entry_id = je.id
       join public.accounts a on a.id = jl.account_id
-      where je.farm_id = ${farmId}
+      where jl.farm_id = ${farmId}
         and je.status = 'posted'
         and je.entry_date >= (current_date - (${months} || ' months')::interval)
       group by to_char(je.entry_date, 'YYYY-MM')

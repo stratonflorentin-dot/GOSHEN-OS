@@ -55,6 +55,7 @@ export default function AnalyticsPage({ initialKpis, farmId }: { initialKpis: an
         farmId,
         from: period.from,
         to: period.to,
+        months: "12",
       });
       const fetchJson = async (path: string) => {
         const response = await fetch(`${path}?${params}`);
