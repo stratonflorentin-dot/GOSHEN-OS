@@ -7,6 +7,7 @@ import { listFarmGeo, type FarmGeo } from "@/services/farmService";
 import { getFarmKpis } from "@/services/analyticsService";
 import { formatHa } from "@/lib/format";
 import type { MapPolygon } from "@/features/map/MapLibreMap";
+import { geoJsonRingToLatLng } from "@/features/map/geometry";
 import { MiniMap } from "@/features/map/MiniMap";
 
 function toPolygons(farms: FarmGeo[]): MapPolygon[] {
@@ -14,7 +15,7 @@ function toPolygons(farms: FarmGeo[]): MapPolygon[] {
     if (!farm.boundaryGeoJson) return [];
     try {
       const geom = JSON.parse(farm.boundaryGeoJson) as { coordinates: [number, number][][] };
-      return [{ id: farm.farmId, name: farm.name, ring: geom.coordinates[0].map(([lng, lat]) => [lat, lng] as [number, number]) }];
+      return [{ id: farm.farmId, name: farm.name, ring: geoJsonRingToLatLng(geom.coordinates[0]) }];
     } catch { return []; }
   });
 }

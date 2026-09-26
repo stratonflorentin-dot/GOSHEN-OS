@@ -6,6 +6,7 @@ import { listMemberships } from "@/services/orgService";
 import { listFarmGeo } from "@/services/farmService";
 import { formatHa } from "@/lib/format";
 import type { MapPolygon } from "@/features/map/MapLibreMap";
+import { geoJsonRingToLatLng } from "@/features/map/geometry";
 import { MiniMap } from "@/features/map/MiniMap";
 
 export default async function FarmsPage() {
@@ -19,7 +20,7 @@ export default async function FarmsPage() {
     if (!farm.boundaryGeoJson) return [];
     try {
       const geom = JSON.parse(farm.boundaryGeoJson) as { coordinates: [number, number][][] };
-      return [{ id: farm.farmId, name: farm.name, ring: geom.coordinates[0].map(([lng, lat]) => [lat, lng] as [number, number]) }];
+      return [{ id: farm.farmId, name: farm.name, ring: geoJsonRingToLatLng(geom.coordinates[0]) }];
     } catch { return []; }
   });
   const mappedCount = farms.filter((farm) => farm.boundaryGeoJson).length;

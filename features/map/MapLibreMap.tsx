@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl, { type GeoJSONSource, type Map as MapLibreInstance, type StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Map as MapIcon, Satellite, Rotate3D } from "lucide-react";
+import { openRing } from "./geometry";
 
 export type MapPolygon = {
   id: string;
@@ -111,14 +112,15 @@ function boundaryCollection(polygons: MapPolygon[]) {
   return {
     type: "FeatureCollection" as const,
     features: polygons
-      .filter((polygon) => polygon.ring.length >= 2)
-      .map((polygon) => ({
+      .map((polygon) => ({ polygon, ring: openRing(polygon.ring) }))
+      .filter(({ ring }) => ring.length >= 2)
+      .map(({ polygon, ring }) => ({
         type: "Feature" as const,
         id: polygon.id,
         properties: { id: polygon.id, name: polygon.name, color: polygon.color ?? "#22a65a" },
-        geometry: polygon.ring.length >= 3
-          ? { type: "Polygon" as const, coordinates: [[...polygon.ring, polygon.ring[0]].map(([lat, lng]) => [lng, lat])] }
-          : { type: "LineString" as const, coordinates: polygon.ring.map(([lat, lng]) => [lng, lat]) },
+        geometry: ring.length >= 3
+          ? { type: "Polygon" as const, coordinates: [[...ring, ring[0]].map(([lat, lng]) => [lng, lat])] }
+          : { type: "LineString" as const, coordinates: ring.map(([lat, lng]) => [lng, lat]) },
       })),
   };
 }
@@ -126,7 +128,7 @@ function boundaryCollection(polygons: MapPolygon[]) {
 function editableVertexCollection(polygon?: MapPolygon) {
   return {
     type: "FeatureCollection" as const,
-    features: (polygon?.ring ?? []).map(([lat, lng], vertexIndex) => ({
+    features: openRing(polygon?.ring ?? []).map(([lat, lng], vertexIndex) => ({
       type: "Feature" as const,
       properties: { vertexIndex },
       geometry: { type: "Point" as const, coordinates: [lng, lat] },

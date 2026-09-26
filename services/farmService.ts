@@ -97,28 +97,37 @@ export async function updateFarmBoundary(
   boundaryGeoJson: string,
 ): Promise<void> {
   return withUser(userId, async (db) => {
-    const rows = await db`
-      with candidate as (
+    const validation = await db`
+      select ST_IsValid(candidate.geom) as is_valid,
+             ST_IsValidReason(candidate.geom) as reason
+      from (
         select ST_SetSRID(ST_GeomFromGeoJSON(${boundaryGeoJson}), 4326) as geom
-      ), updated as (
-        update public.farms f
-        set boundary = candidate.geom,
-            boundary_source = 'manual_draw'
-        from candidate
-        where f.id = ${farmId}
-          and f.organization_id = ${organizationId}
-          and ST_IsValid(candidate.geom)
-        returning f.id, f.organization_id, f.boundary, f.area_m2
-      )
+      ) candidate
+    `;
+    if (!validation[0]?.is_valid) {
+      throw new Error(`BOUNDARY_INVALID:${validation[0]?.reason ?? "unknown geometry error"}`);
+    }
+
+    const updated = await db`
+      update public.farms
+      set boundary = ST_SetSRID(ST_GeomFromGeoJSON(${boundaryGeoJson}), 4326),
+          boundary_source = 'manual_draw'
+      where id = ${farmId} and organization_id = ${organizationId}
+      returning id
+    `;
+    if (!updated[0]) throw new Error("BOUNDARY_NOT_ALLOWED");
+
+    const versions = await db`
       insert into public.farm_boundary_versions
         (farm_id, organization_id, boundary, source, point_count, area_m2, perimeter_m)
-      select id, organization_id, boundary, 'manual_draw',
-             greatest(ST_NPoints(ST_ExteriorRing(boundary)) - 1, 0),
-             area_m2, ST_Perimeter(boundary::geography)
-      from updated
+      select f.id, f.organization_id, f.boundary, 'manual_draw',
+             greatest(ST_NPoints(ST_ExteriorRing(f.boundary)) - 1, 0),
+             f.area_m2, ST_Perimeter(f.boundary::geography)
+      from public.farms f
+      where f.id = ${farmId} and f.organization_id = ${organizationId}
       returning farm_id
     `;
-    if (!rows[0]) throw new Error("BOUNDARY_INVALID_OR_NOT_ALLOWED");
+    if (!versions[0]) throw new Error("BOUNDARY_HISTORY_SAVE_FAILED");
   });
 }
 

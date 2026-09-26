@@ -4,6 +4,7 @@ import { listMemberships } from "@/services/orgService";
 import { listFarmGeo } from "@/services/farmService";
 import { listPlotGeo } from "@/services/plotService";
 import type { MapPolygon } from "@/features/map/MapLibreMap";
+import { geoJsonRingToLatLng } from "@/features/map/geometry";
 import { MapWorkspace } from "@/features/map/MapWorkspace";
 
 export default async function MapPage() {
@@ -28,7 +29,7 @@ export default async function MapPage() {
       return {
         id: f.farmId,
         name: f.name,
-        ring: geom.coordinates[0].map(([lng, lat]) => [lat, lng] as [number, number]),
+        ring: geoJsonRingToLatLng(geom.coordinates[0]),
       };
     });
   const plotPolygons: MapPolygon[] = plots
@@ -38,7 +39,7 @@ export default async function MapPage() {
       return {
         id: `plot:${plot.id}`,
         name: plot.name,
-        ring: geom.coordinates[0].map(([lng, lat]) => [lat, lng] as [number, number]),
+        ring: geoJsonRingToLatLng(geom.coordinates[0]),
         color: "#c87924",
       };
     });

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getSessionUser } from "@/lib/auth/server";
 import { listMemberships } from "@/services/orgService";
 import { updateFarmBoundary } from "@/services/farmService";
+import { openRing } from "@/features/map/geometry";
 
 export async function saveFarmBoundaryAction(input: {
   farmId: string;
@@ -33,8 +34,10 @@ export async function saveFarmBoundaryAction(input: {
     return { error: "Boundary coordinates are invalid." };
   }
 
-  const [firstLat, firstLng] = input.ring[0];
-  const closedRing = [...input.ring, [firstLat, firstLng] as [number, number]];
+  const ring = openRing(input.ring);
+  if (ring.length < 3) return { error: "A farm boundary needs at least three distinct points." };
+  const [firstLat, firstLng] = ring[0];
+  const closedRing = [...ring, [firstLat, firstLng] as [number, number]];
   const boundaryGeoJson = JSON.stringify({
     type: "Polygon",
     coordinates: [closedRing.map(([lat, lng]) => [lng, lat])],
@@ -43,8 +46,11 @@ export async function saveFarmBoundaryAction(input: {
   try {
     await updateFarmBoundary(user.id, memberships[0].organization.id, input.farmId, boundaryGeoJson);
   } catch (error) {
-    if (error instanceof Error && error.message === "BOUNDARY_INVALID_OR_NOT_ALLOWED") {
-      return { error: "This boundary is invalid, or you do not have permission to update this farm." };
+    if (error instanceof Error && error.message.startsWith("BOUNDARY_INVALID:")) {
+      return { error: "This fence crosses itself. Move the points until the outline forms one valid boundary, then save again." };
+    }
+    if (error instanceof Error && error.message === "BOUNDARY_NOT_ALLOWED") {
+      return { error: "You do not have permission to update this farm." };
     }
     return { error: "Could not save the farm boundary. Please try again." };
   }
