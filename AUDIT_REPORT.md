@@ -2,13 +2,13 @@
 
 ## Follow-up: documented architecture alignment (2026-09-26)
 
-The `docs/` package is being treated as the intended product and architecture
-specification. The deployed application is **not yet fully aligned** with it.
-The latest production fix is commit `83411dc`: onboarding now loads, the
-organization RPC was verified in a rolled-back production transaction, and
-the migration uses `CREATE OR REPLACE` so the existing function does not cause
-SQLSTATE 42723 on reapplication. The production site responds successfully on
-`/`, `/onboarding`, `/manifest.webmanifest`, and `/favicon.ico`.
+The `docs/` package is the product and architecture specification. Backend
+references now consistently describe the deployed Neon + Better Auth stack.
+Commit `83411dc` fixed onboarding and made migration 0010 safely replace the
+existing RPC; commit `7c8f40c` aligned the docs and replaced Leaflet with
+MapLibre, including a pitched 3D satellite view. The organization RPC was
+verified in a rolled-back production transaction. Production home, onboarding,
+manifest, and favicon routes respond successfully.
 
 Current targeted checks: TypeScript passes; 8 unit tests pass; the Webpack
 production build passes. These checks do not certify all modules or the full
@@ -17,11 +17,9 @@ acceptance journeys in `docs/18-testing-strategy.md` and
 
 Architecture gaps found against the docs include:
 
-- **Backend specification conflict:** `docs/README.md`, `docs/03-database-schema.md`,
-  and deployment/recovery documents specify Supabase, while
-  `docs/nemo-prompt.md` specifies Neon + Better Auth and the deployed app uses
-  Neon-compatible PostgreSQL + Better Auth. Resolve this contradiction before
-  changing production infrastructure.
+- **Backend specification conflict:** resolved in the docs. Neon + Better Auth
+  is the documented and deployed backend; Supabase services are not presented
+  as part of the current runtime.
 - **GIS stack:** the documented 2D standard is MapLibre; the active farm map is
   now MapLibre. A 3D satellite toggle uses a pitched camera and Esri imagery;
   it is not a terrain-enabled Cesium globe. The browser-only boundary and
@@ -38,8 +36,9 @@ Architecture gaps found against the docs include:
   workflow, or verified 360 px device matrix is present; passing the current
   focused unit/build checks is not equivalent to the documented DoD.
 
-The full `docs/` package should remain the product target, with architecture
-conflicts resolved before incompatible backend or map rewrites.
+The full `docs/` package remains the product target. The live account currently
+has an organization but no farm boundary, so the map page shows its empty state;
+create a farm and start boundary capture to open the interactive map.
 
 **Audit date:** 2026-09-26
 **Repository:** `stratonflorentin-dot/GOSHEN-OS`
