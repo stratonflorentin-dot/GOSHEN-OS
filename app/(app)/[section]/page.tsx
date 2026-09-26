@@ -1,21 +1,10 @@
 import { Construction } from "lucide-react";
 
 const TITLES: Record<string, { title: string; phase: number }> = {
-  crops: { title: "Crops", phase: 3 },
-  livestock: { title: "Livestock", phase: 3 },
-  inventory: { title: "Inventory", phase: 4 },
-  procurement: { title: "Procurement", phase: 4 },
-  finance: { title: "Finance", phase: 5 },
-  production: { title: "Production", phase: 6 },
-  labor: { title: "Labor", phase: 6 },
-  equipment: { title: "Equipment", phase: 6 },
-  irrigation: { title: "Irrigation", phase: 6 },
   weather: { title: "Weather", phase: 7 },
   analytics: { title: "Analytics", phase: 7 },
   reports: { title: "Reports", phase: 11 },
   assistant: { title: "AI Assistant", phase: 10 },
-  tasks: { title: "Tasks", phase: 6 },
-  documents: { title: "Documents", phase: 6 },
   team: { title: "Team", phase: 12 },
   settings: { title: "Settings", phase: 12 },
 };

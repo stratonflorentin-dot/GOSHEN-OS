@@ -37,6 +37,9 @@ export type CropSeason = {
   seedCost: string | null;
   status: string;
   createdAt: string;
+  cropName: string | null;
+  varietyName: string | null;
+  seasonName: string | null;
 };
 
 export type CropActivity = {
@@ -86,6 +89,10 @@ export type Harvest = {
   storageLocationId: string | null;
   notes: string | null;
   createdAt: string;
+  cropName: string | null;
+  varietyName: string | null;
+  seasonName: string | null;
+  totalValue: string | null;
 };
 
 function toSeason(row: Record<string, unknown>): Season {
@@ -121,6 +128,9 @@ function toCropSeason(row: Record<string, unknown>): CropSeason {
     seedCost: (row.seed_cost as string | null) ?? null,
     status: row.status as string,
     createdAt: String(row.created_at),
+    cropName: (row.crop_name as string | null) ?? null,
+    varietyName: (row.variety_name as string | null) ?? null,
+    seasonName: (row.season_name as string | null) ?? null,
   };
 }
 
@@ -176,6 +186,10 @@ function toHarvest(row: Record<string, unknown>): Harvest {
     storageLocationId: (row.storage_location_id as string | null) ?? null,
     notes: (row.notes as string | null) ?? null,
     createdAt: String(row.created_at),
+    cropName: (row.crop_name as string | null) ?? null,
+    varietyName: (row.variety_name as string | null) ?? null,
+    seasonName: (row.season_name as string | null) ?? null,
+    totalValue: (row.total_value as string | null) ?? null,
   };
 }
 
@@ -345,9 +359,34 @@ export async function listHarvests(
 ): Promise<Harvest[]> {
   return withUser(userId, async (db) => {
     const rows = await db`
-      select * from public.harvests
-      where crop_season_id = ${cropSeasonId}
-      order by harvest_date desc
+      select h.*, c.name as crop_name, cv.name as variety_name, s.name as season_name
+      from public.harvests h
+      join public.crop_seasons cs on cs.id = h.crop_season_id
+      join public.crops c on c.id = cs.crop_id
+      left join public.crop_varieties cv on cv.id = cs.variety_id
+      join public.seasons s on s.id = cs.season_id
+      where h.crop_season_id = ${cropSeasonId}
+      order by h.harvest_date desc
+    `;
+    return rows.map(toHarvest);
+  });
+}
+
+export async function listHarvestsByPlot(
+  userId: string,
+  organizationId: string,
+  plotId: string,
+): Promise<Harvest[]> {
+  return withUser(userId, async (db) => {
+    const rows = await db`
+      select h.*, c.name as crop_name, cv.name as variety_name, s.name as season_name
+      from public.harvests h
+      join public.crop_seasons cs on cs.id = h.crop_season_id
+      join public.crops c on c.id = cs.crop_id
+      left join public.crop_varieties cv on cv.id = cs.variety_id
+      join public.seasons s on s.id = cs.season_id
+      where cs.organization_id = ${organizationId} and cs.plot_id = ${plotId}
+      order by h.harvest_date desc
     `;
     return rows.map(toHarvest);
   });
