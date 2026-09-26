@@ -1,8 +1,19 @@
 {
-  "name": "GOSHEN OS",
+  "id": "/",
+  "name": "GOSHEN OS — Farm Operations",
   "short_name": "GOSHEN OS",
+  "description": "Manage farms, field operations, inventory, and finances in one workspace.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#14211a"
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#f5f7f5",
+  "theme_color": "#14211a",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
 }

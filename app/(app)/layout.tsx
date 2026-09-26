@@ -3,7 +3,6 @@ import { Shell } from "@/components/layout/Shell";
 import { getSessionUser } from "@/lib/auth/server";
 import { ensureProfile } from "@/services/profileService";
 import { listMemberships } from "@/services/orgService";
-import ServiceWorkerRegistration from "@/components/offline/ServiceWorkerRegistration";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -20,7 +19,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Shell userName={profile.fullName || user.name || "User"} orgName={memberships[0]?.organization.name ?? null}>
         {children}
       </Shell>
-      <ServiceWorkerRegistration />
     </>
   );
 }

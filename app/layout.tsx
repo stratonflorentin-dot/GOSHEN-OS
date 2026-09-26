@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import "maplibre-gl/dist/maplibre-gl.css";
+import ServiceWorkerRegistration from "@/components/offline/ServiceWorkerRegistration";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -9,7 +10,11 @@ export const metadata: Metadata = {
   title: "GOSHEN OS | Agricultural Operations",
   description: "Manage your agricultural organization, farms, field operations, inventory, and finances in one workspace.",
   manifest: "/manifest.json",
-  icons: { icon: "/favicon.ico" },
+  icons: {
+    icon: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }, { url: "/favicon.ico" }],
+    apple: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+  },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "GOSHEN OS" },
 };
 
 export const viewport: Viewport = {
@@ -32,7 +37,10 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        {children}
+        <ServiceWorkerRegistration />
+      </body>
     </html>
   );
 }
