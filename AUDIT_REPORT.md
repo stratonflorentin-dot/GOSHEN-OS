@@ -45,6 +45,7 @@ This is a repository review, live page inspection, and targeted database verific
 ### Broken or high-confidence defects
 
 - **Signup previously failed:** the unsupported database adapter and mismatched auth schema have been corrected and deployed. A second onboarding blocker was found: `profiles.id` referenced retired `neon_auth.user`. Migration 0009 now points it at `auth.user` on configured development and production databases.
+- The live signup API rejected the canonical site origin because `BETTER_AUTH_URL` in the configured production environment points at a deployment-specific Vercel hostname. The stable production hostname has now been added as an explicit trusted origin; rerun the disposable live lifecycle test after deployment.
 - **Signup success UX was wrong:** email verification is disabled, but signup sent the user to a page instructing them to check email. It now routes to `/dashboard` and catches network exceptions in the working tree.
 - **Signup surfaced backend messages:** detailed auth/database errors could be shown in the browser. The updated signup maps known input errors and returns a safe generic message for other failures.
 - The initial `npm run test:unit` failed because Vitest was missing; Vitest and seven focused tests have now been added and pass. They do not replace database/RLS or end-to-end coverage.

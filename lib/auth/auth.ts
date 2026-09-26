@@ -24,6 +24,14 @@ const mailFrom = process.env.MAIL_FROM ?? "GOSHEN OS <no-reply@goshen-os.local>"
  * driver, so Better Auth needs its Kysely dialect rather than the raw SQL tag.
  */
 export const auth = betterAuth({
+  // Vercel's deployment URL can differ from the stable production alias that
+  // users open. Keep both explicit so same-site signup/session writes pass the
+  // origin check without trusting arbitrary *.vercel.app hosts.
+  trustedOrigins: [
+    process.env.BETTER_AUTH_URL,
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
+    "https://goshen-os-five.vercel.app",
+  ].filter((origin): origin is string => Boolean(origin)),
   database: {
     dialect: new PostgresJSDialect({ postgres: sql }),
     type: "postgres",

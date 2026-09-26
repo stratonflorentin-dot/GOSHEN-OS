@@ -9,6 +9,7 @@ The product brief defines a multi-tenant commercial platform. Deliver it as test
 - [x] Make successful signup use the authenticated dashboard and sanitize registration errors.
 - [x] Apply migration 0008 to the Neon database configured in `.env.production` without rotating application-role credentials.
 - [x] Fix the profile foreign key to reference the current `auth.user` table; apply migration 0009 to configured development and production databases.
+- [x] Add the stable production site origin to Better Auth's explicit trusted-origin allowlist after the live signup probe exposed `INVALID_ORIGIN`.
 - [x] Push and confirm the updated registration page markup is visible on the live site.
 - [ ] Verify account creation and session creation with a disposable live test account.
 - [ ] Verify a disposable account can sign up, sign in, retain a session, and sign out on the live deployment.
