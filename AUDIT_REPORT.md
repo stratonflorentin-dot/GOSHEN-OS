@@ -6,7 +6,7 @@
 
 ## Scope and evidence
 
-This is a repository review, live page inspection, and targeted database verification. Live signup, signin, session persistence, and logout pass against the public Vercel URL. The authenticated `/dashboard` still returns 500: Vercel logs show profile creation fails because the profile foreign key and auth user are on mismatched database state. Migration 0009 was applied to the configured development and `.env.production` databases, but Vercel's `DATABASE_URL_APP` is a Secret and its actual target could not be verified through the CLI. Do not consider account onboarding complete until both Vercel database URLs target the same database and branch and the public dashboard succeeds. Tenant-isolation verification passes its two-tenant checks on the configured development database, including anonymous isolation, tenant reads/writes, privilege escalation, and append-only policies. GeoJSON parsing was checked against configured PostGIS and corrected to supported function signatures. Seven Vitest unit tests pass. No automated desktop/tablet/mobile browser matrix exists, so responsive behavior and phone workflows are not certified.
+This is a repository review, live page inspection, and targeted database verification. Live signup, signin, session persistence, and logout pass against the public Vercel URL. Earlier Vercel `/dashboard` errors were traced to `DATABASE_URL_APP` pointing at a different database than Better Auth's `DATABASE_URL`. On 2026-09-26, the Production app-role URL was aligned to the existing Vercel owner database; the role was verified as non-owner with RLS enabled, and its connection was verified. A fresh Git-triggered deployment and authenticated dashboard/onboarding smoke check are pending. Tenant-isolation verification passes its two-tenant checks on the configured development database, including anonymous isolation, tenant reads/writes, privilege escalation, and append-only policies. GeoJSON parsing was checked against configured PostGIS and corrected to supported function signatures. Seven Vitest unit tests pass. No automated desktop/tablet/mobile browser matrix exists, so responsive behavior and phone workflows are not certified.
 
 ## What exists
 
@@ -110,7 +110,7 @@ Variables referenced by source: `DATABASE_URL`, `DATABASE_URL_APP`, `BETTER_AUTH
 
 ## Recommended order
 
-1. Align Vercel production database URLs to the same database and branch, apply required migrations, and verify dashboard profile creation with a disposable account.
+1. Verify the fresh Vercel deployment now that `DATABASE_URL_APP` is aligned; exercise profile creation and onboarding with a disposable account.
 2. Install test infrastructure and add auth, validation, geometry, calculations, and RLS isolation tests.
 3. Reconcile local workspace data with authenticated organization/farm onboarding; choose explicit import/sync/backup semantics.
 4. Audit every tenant table, policy, server action, API, and database role; run Organization A/B isolation checks on a disposable database.
