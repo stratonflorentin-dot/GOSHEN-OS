@@ -2,7 +2,7 @@
 -- 0001_foundation.sql — Phase 1 (docs/03-database-schema.md §1–2, §13)
 -- Neon / Lakebase Postgres edition.
 --
--- Identity: Neon Auth (Managed Better Auth). Users live in neon_auth."user"
+-- Identity: Better Auth (self-managed). Users live in auth."user"
 -- (id uuid). Tenant authorization uses the transaction-local setting
 -- app.user_id, set by the application per request (lib/db withUser()).
 -- SECURITY DEFINER helpers owned by the table owner bypass RLS by design;
@@ -44,10 +44,10 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------
--- Identity (profiles mirror neon_auth."user")
+-- Identity (profiles mirror auth."user")
 -- ---------------------------------------------------------------------
 create table public.profiles (
-  id uuid primary key references neon_auth."user"(id) on delete cascade,
+  id uuid primary key references auth."user"(id) on delete cascade,
   full_name text not null default '',
   phone text,
   locale text not null default 'en' check (locale in ('en','sw')),
@@ -331,7 +331,7 @@ begin
   end if;
 
   insert into public.profiles (id, full_name)
-  values (v_uid, coalesce((select name from neon_auth."user" where id = v_uid), ''))
+  values (v_uid, coalesce((select name from auth."user" where id = v_uid), ''))
   on conflict (id) do nothing;
 
   insert into public.organizations (name, country, default_currency, timezone, created_by)
@@ -373,7 +373,7 @@ begin
   if not found then raise exception 'Invitation invalid or expired'; end if;
 
   insert into public.profiles (id, full_name)
-  values (v_uid, coalesce((select name from neon_auth."user" where id = v_uid), ''))
+  values (v_uid, coalesce((select name from auth."user" where id = v_uid), ''))
   on conflict (id) do nothing;
 
   insert into public.organization_members (organization_id, user_id, role, status)
