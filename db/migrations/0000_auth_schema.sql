@@ -61,3 +61,27 @@ create index if not exists auth_session_expires_at_idx on auth.session (expires_
 create index if not exists auth_account_user_id_idx on auth.account (user_id);
 create index if not exists auth_verification_identifier_idx on auth.verification (identifier);
 create index if not exists auth_verification_expires_at_idx on auth.verification (expires_at);
+
+-- Triggers for updated_at
+create or replace function auth.touch_updated_at() returns trigger
+language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end $$;
+
+drop trigger if exists user_touch on auth."user";
+create trigger user_touch before update on auth."user"
+  for each row execute function auth.touch_updated_at();
+
+drop trigger if exists session_touch on auth.session;
+create trigger session_touch before update on auth.session
+  for each row execute function auth.touch_updated_at();
+
+drop trigger if exists account_touch on auth.account;
+create trigger account_touch before update on auth.account
+  for each row execute function auth.touch_updated_at();
+
+drop trigger if exists verification_touch on auth.verification;
+create trigger verification_touch before update on auth.verification
+  for each row execute function auth.touch_updated_at();

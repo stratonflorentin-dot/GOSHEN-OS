@@ -30,23 +30,11 @@ export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: Boolean(process.env.SMTP_HOST),
+    requireEmailVerification: false, // Disable email verification for now
   },
-  emailVerification: {
-    sendVerificationEmail: async ({ user, url }) => {
-      if (!process.env.SMTP_HOST) {
-        // Dev fallback: print the verification link to the server console.
-        console.info(`[auth] verification link for ${user.email}: ${url}`);
-        return;
-      }
-      await smtp.sendMail({
-        from: mailFrom,
-        to: user.email,
-        subject: "Verify your email - GOSHEN OS",
-        text: `Welcome to GOSHEN OS. Verify your email: ${url}`,
-        html: `<p>Welcome to <strong>GOSHEN OS</strong>.</p><p><a href="${url}">Verify your email</a></p>`,
-      });
-    },
+  advanced: {
+    disableCsrf: true, // Disable CSRF for API routes
+    useSchema: true, // Use the configured schema
   },
 });
 
