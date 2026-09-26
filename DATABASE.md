@@ -27,7 +27,7 @@ Run `scripts/verify-rls.ts` against a disposable database after confirming its t
 
 `db/migrations/0000_auth_schema.sql` originally created snake_case auth columns and declared `email_verified` as a timestamp. Better Auth expects a boolean and the original runtime did not map its field names to these columns. `lib/auth/auth.ts` now configures the Kysely Postgres.js dialect, explicitly maps Better Auth fields to existing snake_case columns, and uses `schemaName: "auth"`. `0008_auth_signup_alignment.sql` changes the verified flag to boolean and adds password/token expiry columns required for email/password accounts.
 
-This migration is additive/data-preserving for current values: non-null old verification timestamps become `true`, null values become `false`. It has been applied with schema-only mode and verified against the Neon database configured in `.env.production`. Deploy the updated auth code, then verify the live registration flow.
+This migration is additive/data-preserving for current values: non-null old verification timestamps become `true`, null values become `false`. It has been applied with schema-only mode and verified against the Neon database configured in `.env.production`. The updated registration page is visible on the live site; verify account and session creation with a disposable account before considering signup fully proven.
 
 ## Migration process caveats
 

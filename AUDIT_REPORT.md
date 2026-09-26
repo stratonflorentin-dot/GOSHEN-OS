@@ -6,7 +6,7 @@
 
 ## Scope and evidence
 
-This is a repository review plus a read-only inspection of the live home and registration pages. The production home and `/register` were opened in Chrome. The home describes a device-local workspace; the registration screen showed “Could not create your account.” A real account was not submitted, and no production database data was changed. The local project typecheck and production Webpack build were run. The build command using default Turbopack is blocked by an invalid local Windows native binding. Vitest and seven focused unit tests have since been added and pass. No automated desktop/tablet/mobile browser matrix or tenant-isolation end-to-end suite exists in the repository, so those behaviors are not certified by this audit.
+This is a repository review plus read-only inspection of the live home and registration pages. The production home describes a device-local workspace; before the fix, `/register` displayed “Could not create your account.” After pushing the fix, the live registration HTML reflects the updated form (including the 72-character password limit). No real account was submitted, so database-backed signup/session creation still needs an end-to-end check with a disposable test account. The local project typecheck and production Webpack build were run. The build command using default Turbopack is blocked by an invalid local Windows native binding. Vitest and seven focused unit tests pass. No automated desktop/tablet/mobile browser matrix or tenant-isolation end-to-end suite exists, so those behaviors are not certified by this audit.
 
 ## What exists
 
@@ -102,7 +102,7 @@ Add descriptions and production/development requirements to `.env.example`; veri
 - `npm run build` (default Turbopack): blocked on this Windows workspace because the installed Next SWC native binding is not a valid Win32 application; the Webpack build succeeded as a verification alternative.
 - `npm run test:unit`: passed (2 files, 7 tests).
 - `npm run lint`: no lint script is configured. ESLint config and rule coverage need a separate review.
-- Live production `/` and `/register` opened read-only; no signup submission, DB write, or mobile/tablet viewport run was performed.
+- Live production `/` and `/register` opened read-only before and after push; new registration markup is visible. No signup submission, user DB write, or mobile/tablet viewport run was performed.
 
 ## Recommended order
 

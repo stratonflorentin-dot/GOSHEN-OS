@@ -8,7 +8,8 @@ The product brief defines a multi-tenant commercial platform. Deliver it as test
 - [x] Map Better Auth schema fields to existing snake_case columns and correct `email_verified` type through a migration.
 - [x] Make successful signup use the authenticated dashboard and sanitize registration errors.
 - [x] Apply migration 0008 to the Neon database configured in `.env.production` without rotating application-role credentials.
-- [ ] Deploy the updated auth code and verify live signup/session creation with a disposable account.
+- [x] Push and confirm the updated registration page markup is visible on the live site.
+- [ ] Verify account creation and session creation with a disposable live test account.
 - [ ] Verify a disposable account can sign up, sign in, retain a session, and sign out on the live deployment.
 
 ## Stage 1 — Verification foundation
