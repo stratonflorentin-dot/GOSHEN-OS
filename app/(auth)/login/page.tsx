@@ -37,9 +37,9 @@ export default function LoginPage() {
           <span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary text-white">
             <Leaf className="h-6 w-6" />
           </span>
-          <h1 className="mt-4 text-xl font-semibold">Sign in to GOSHEN OS</h1>
+          <h1 className="mt-4 text-xl font-semibold tracking-tight">Welcome to GOSHEN OS</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            The operating system for agricultural businesses
+            Sign in to continue to your farm workspace
           </p>
         </div>
 
@@ -89,6 +89,10 @@ export default function LoginPage() {
             {pending ? "Signing in…" : "Sign in"}
           </Button>
         </form>
+
+        <Link href="/" className="mt-3 flex h-11 items-center justify-center rounded-xl border border-[#dfe7df] bg-white text-sm font-semibold text-[#28583a] transition hover:border-[#b9cfbd] hover:bg-[#f8fbf7]">
+          Continue without an account
+        </Link>
 
         <p className="mt-5 text-center text-sm text-muted-foreground">
           No account yet?{" "}

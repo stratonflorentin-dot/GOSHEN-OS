@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity, ArrowDownToLine, BarChart3, Beef, CircleHelp,
-  CloudSun, FileSpreadsheet, Leaf, MapPinned, Menu, Plus, Search, Settings2,
+  CloudSun, FileSpreadsheet, Leaf, MapPinned, Menu, Plus, Search, Settings2, Map,
   Sprout, Tractor, Wheat, X,
 } from "lucide-react";
 
@@ -70,7 +70,7 @@ export default function Workspace() {
 
   const today = new Intl.DateTimeFormat("en", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
   return (
-    <div className="min-h-screen bg-[#f5f7f4] text-[#1c2921]">
+    <div className="min-h-screen bg-[#f5f7f4] pb-24 text-[#1c2921] md:pb-0">
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-[252px] flex-col border-r border-[#e7ebe6] bg-white px-5 py-6 lg:flex">
         <div className="flex items-center gap-3 px-2">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#174c35] text-white"><Leaf className="h-5 w-5" /></span>
@@ -93,7 +93,7 @@ export default function Workspace() {
           <div className="flex items-center gap-3">
             <button className="rounded-lg p-2 text-[#66746b] lg:hidden" onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle navigation"><Menu className="h-5 w-5" /></button>
             <div className="hidden items-center gap-2 text-xs text-[#89948c] sm:flex"><span>Workspace</span><span>/</span><span className="font-semibold text-[#34443a]">{section}</span></div>
-            <div className="font-bold tracking-[.1em] lg:hidden">GOSHEN</div>
+            <div className="flex items-center gap-2 font-bold tracking-[.1em] lg:hidden"><Leaf className="h-4 w-4 text-[#35764c]"/>GOSHEN</div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <span className="hidden text-xs text-[#8a958d] md:block">{today}</span>
@@ -108,6 +108,8 @@ export default function Workspace() {
             <div><div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[.16em] text-[#65806d]"><span className="h-1.5 w-1.5 rounded-full bg-[#4c9a64]"/>Farm management</div><h1 className="text-[26px] font-semibold tracking-tight sm:text-[30px]">{section === "Overview" ? "Good day. Here’s your farm." : section}</h1><p className="mt-1.5 text-sm text-[#7d8981]">A clear view of your operation, all in one place.</p></div>
             <div className="flex items-center gap-2 text-xs text-[#7d8981]"><span className="grid h-8 w-8 place-items-center rounded-full bg-[#eaf1eb] text-[#38644a]"><Activity className="h-4 w-4"/></span><span>{records.length} record{records.length === 1 ? "" : "s"} saved on this device</span></div>
           </div>
+
+          <FieldOverview />
 
           <div className="mb-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
             <Stat icon={MapPinned} label="Farms & fields" value={totals.farms.toString()} note="properties recorded" tone="green"/>
@@ -141,6 +143,14 @@ export default function Workspace() {
         </div>
       </main>
 
+      <nav aria-label="Workspace navigation" className="fixed inset-x-4 bottom-[max(12px,env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-[440px] items-center justify-around rounded-2xl border border-white/10 bg-[#14271c] px-2 py-2 text-white shadow-[0_12px_34px_rgba(12,31,19,.28)] md:hidden">
+        <MobileNav icon={BarChart3} label="Home" active={section === "Overview"} onClick={() => setSection("Overview")} />
+        <MobileNav icon={Map} label="Fields" active={section === "Farms"} onClick={() => setSection("Farms")} />
+        <button onClick={() => {setType(section === "Overview" ? "Farms" : section); setAdding(true);}} aria-label="Add farm record" className="grid h-11 w-11 place-items-center rounded-xl bg-[#87b744] text-[#193322] shadow-md"><Plus className="h-5 w-5"/></button>
+        <MobileNav icon={Sprout} label="Crops" active={section === "Crops"} onClick={() => setSection("Crops")} />
+        <MobileNav icon={FileSpreadsheet} label="Finance" active={section === "Finance"} onClick={() => setSection("Finance")} />
+      </nav>
+
       {adding && <div className="fixed inset-0 z-50 grid place-items-center bg-[#102318]/40 p-4" onMouseDown={(e) => {if (e.target === e.currentTarget) setAdding(false);}}><form onSubmit={addRecord} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><div className="text-[10px] font-bold uppercase tracking-[.16em] text-[#65806d]">New entry</div><h2 className="mt-1 text-lg font-semibold">Add a farm record</h2></div><button type="button" onClick={() => setAdding(false)} aria-label="Close" className="rounded-lg p-1 text-[#829087] hover:bg-[#f2f5f1]"><X className="h-5 w-5"/></button></div>
         <label className="mt-5 block text-xs font-semibold">Record type<select value={type} onChange={(e) => setType(e.target.value as typeof type)} className="mt-1.5 h-10 w-full rounded-lg border border-[#e2e8e1] bg-white px-3 text-sm">{sections.slice(1).map((s) => <option key={s.name}>{s.name}</option>)}</select></label>
         <label className="mt-4 block text-xs font-semibold">Name<input autoFocus required value={name} onChange={(e) => setName(e.target.value)} placeholder={type === "Farms" ? "e.g. North field" : `e.g. ${type} entry`} className="mt-1.5 h-10 w-full rounded-lg border border-[#e2e8e1] px-3 text-sm outline-none focus:border-[#3d8055]"/></label>
@@ -150,6 +160,32 @@ export default function Workspace() {
       </form></div>}
     </div>
   );
+}
+
+function FieldOverview() {
+  return (
+    <section className="relative mb-6 min-h-[158px] overflow-hidden rounded-[22px] bg-[#183c2a] shadow-[0_8px_24px_rgba(22,55,35,.12)] sm:min-h-[184px]" aria-label="Field overview">
+      <svg className="absolute inset-0 h-full w-full" viewBox="0 0 1200 230" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Illustration of cultivated fields">
+        <defs><linearGradient id="field-shade" x1="0" x2="1"><stop stopColor="#102d20"/><stop offset=".52" stopColor="#102d20" stopOpacity=".68"/><stop offset="1" stopColor="#102d20" stopOpacity=".08"/></linearGradient></defs>
+        <rect width="1200" height="230" fill="#1b4b32"/>
+        <path d="M500 0 695 0 556 230 354 230Z" fill="#3f713c"/><path d="M700 0 865 0 733 230 565 230Z" fill="#607e3a"/>
+        <path d="M870 0 1015 0 888 230 738 230Z" fill="#2e643a"/><path d="M1020 0 1200 0 1200 230 893 230Z" fill="#476f35"/>
+        <path d="M510 0 695 0 556 230 354 230Z M700 0 865 0 733 230 565 230Z M870 0 1015 0 888 230 738 230Z M1020 0 1200 0 1200 230 893 230Z" fill="none" stroke="#d6c77f" strokeOpacity=".52" strokeWidth="2"/>
+        <path d="M575 0 430 230 M640 0 493 230 M756 0 626 230 M808 0 678 230 M930 0 804 230 M1080 0 960 230 M1130 0 1015 230" fill="none" stroke="#bdd18a" strokeOpacity=".2" strokeWidth="1"/>
+        <rect width="1200" height="230" fill="url(#field-shade)"/>
+      </svg>
+      <div className="relative flex min-h-[158px] max-w-xl flex-col justify-center px-5 py-5 text-white sm:min-h-[184px] sm:px-8">
+        <span className="mb-2 inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[.15em] text-white/80"><MapPinned className="h-3 w-3 text-[#c5dc8f]"/>Land & operations</span>
+        <h2 className="text-lg font-semibold tracking-tight sm:text-xl">Your farm, at a glance.</h2>
+        <p className="mt-1 max-w-sm text-xs leading-relaxed text-white/70">Keep fields, crop activity, livestock and costs together as your operation grows.</p>
+      </div>
+      <div className="absolute bottom-4 right-4 hidden items-center gap-2 rounded-xl border border-white/15 bg-[#102d20]/60 px-3 py-2 text-[10px] font-medium text-white/80 backdrop-blur sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-[#bddc79]"/>Workspace overview</div>
+    </section>
+  );
+}
+
+function MobileNav({ icon: Icon, label, active, onClick }: { icon: typeof Activity; label: string; active: boolean; onClick: () => void }) {
+  return <button onClick={onClick} aria-current={active ? "page" : undefined} className={`flex min-w-[54px] flex-col items-center gap-1 rounded-xl px-2 py-1.5 text-[9px] font-medium transition ${active ? "text-[#c9e89b]" : "text-white/60 hover:text-white"}`}><Icon className={`h-[18px] w-[18px] ${active ? "stroke-[2.3]" : ""}`}/>{label}</button>;
 }
 
 function TypeIcon({ type }: { type: RecordItem["type"] }) {

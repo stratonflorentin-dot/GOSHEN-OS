@@ -3,12 +3,12 @@
 @tailwind utilities;
 
 :root {
-  --background: #f6f8f7;
-  --foreground: #14211a;
+  --background: #f4f7f3;
+  --foreground: #1c2921;
   --card: #ffffff;
-  --border: 220 14% 92%;
-  --muted: #f1f5f2;
-  --muted-foreground: #66756d;
+  --border: 145 14% 89%;
+  --muted: #f0f4ef;
+  --muted-foreground: #6d7b71;
   --sidebar: #ffffff;
 }
 
@@ -18,27 +18,46 @@
   }
   html {
     -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
   }
   body {
     @apply text-foreground antialiased;
     background: var(--background);
     font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
+  }
+  button, a, input, select, textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid #4a9463;
+    outline-offset: 2px;
   }
 }
 
 @layer components {
   .card {
-    @apply rounded-2xl border border-black/5 bg-white shadow-[0_1px_3px_rgba(16,24,40,0.06)];
+    @apply rounded-2xl border border-[#e5ebe4] bg-white shadow-[0_2px_8px_rgba(25,48,31,0.035)];
   }
   .field-label {
-    @apply mb-1.5 block text-sm font-medium text-foreground;
+    @apply mb-1.5 block text-[13px] font-semibold text-[#33443a];
   }
   .field-input {
-    @apply w-full rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm outline-none transition
+    @apply w-full rounded-xl border border-[#dfe7df] bg-white px-3.5 py-2.5 text-sm outline-none transition
       placeholder:text-muted-foreground/60
-      focus:border-primary focus:ring-2 focus:ring-primary/15;
+      focus:border-[#47865b] focus:ring-4 focus:ring-primary/10;
   }
   .stat-value {
-    @apply text-2xl font-semibold tracking-tight;
+    @apply text-[26px] font-semibold tracking-tight text-[#1d3024];
   }
+}
+
+::selection {
+  background: #d6eadb;
+  color: #143d27;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }

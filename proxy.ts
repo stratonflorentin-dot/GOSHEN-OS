@@ -2,11 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
 /**
- * Lightweight edge check: redirects unauthenticated visitors away from app
- * pages. Full session verification (and RLS) happens server-side per request.
+ * Lightweight session-cookie check: redirects visitors away from app pages.
+ * Full session verification (and RLS) happens server-side per request.
  * Static assets, API routes, and auth pages stay accessible without a session.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const hasSession = getSessionCookie(request);
   const { pathname } = request.nextUrl;
 

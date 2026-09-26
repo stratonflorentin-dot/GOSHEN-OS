@@ -4,36 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import {
-  LayoutDashboard,
-  Map,
-  Sprout,
-  Beef,
-  Boxes,
-  ShoppingCart,
-  Wallet,
-  Users,
-  Tractor,
-  Droplets,
-  Cloud,
-  BarChart3,
-  FileBarChart,
-  Sparkles,
-  ListTodo,
-  FolderOpen,
-  Settings,
-  Leaf,
-  LogOut,
-  Bell,
-  Search,
-  Home,
-  Plus,
-  MoreHorizontal,
-  ChevronDown,
-  Wheat,
-  Camera,
-  Grid2x2,
-  Layers,
-  type LucideIcon,
+  LayoutDashboard, Map, Sprout, Beef, Boxes, Wallet, Cloud, BarChart3,
+  Leaf, LogOut, Home, Plus, ChevronDown, Grid2x2, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth/client";
@@ -43,40 +15,22 @@ type NavItem = { href: string; label: string; icon: LucideIcon; phase?: number }
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/farms", label: "Farms", icon: Map },
-  { href: "/map", label: "Map", icon: Map },
   { href: "/plots", label: "Plots", icon: Grid2x2 },
   { href: "/crops", label: "Crops", icon: Sprout },
   { href: "/livestock", label: "Livestock", icon: Beef },
   { href: "/inventory", label: "Inventory", icon: Boxes },
-  { href: "/procurement", label: "Procurement", icon: ShoppingCart },
   { href: "/finance", label: "Finance", icon: Wallet },
-  { href: "/production", label: "Production", icon: BarChart3 },
-  { href: "/labor", label: "Labor", icon: Users },
-  { href: "/equipment", label: "Equipment", icon: Tractor },
-  { href: "/irrigation", label: "Irrigation", icon: Droplets },
-  { href: "/soil", label: "Soil", icon: Layers },
-  { href: "/tasks", label: "Tasks", icon: ListTodo },
-  { href: "/documents", label: "Documents", icon: FolderOpen },
-  { href: "/weather", label: "Weather", icon: Cloud, phase: 7 },
-  { href: "/analytics", label: "Analytics", icon: BarChart3, phase: 7 },
-  { href: "/reports", label: "Reports", icon: FileBarChart, phase: 11 },
-  { href: "/assistant", label: "AI Assistant", icon: Sparkles, phase: 10 },
+  { href: "/map", label: "Field map", icon: Map },
+  { href: "/weather", label: "Weather", icon: Cloud },
+  { href: "/analytics", label: "Analytics", icon: BarChart3 },
 ];
 
-const MORE_ACTIONS: NavItem[] = [
-  { href: "/team", label: "Team", icon: Users },
-  { href: "/settings", label: "Settings", icon: Settings },
-];
-
-const QUICK_ACTIONS: { label: string; icon: LucideIcon; phase?: number }[] = [
-  { label: "Record crop activity", icon: Sprout, phase: 3 },
-  { label: "Record livestock event", icon: Beef, phase: 3 },
-  { label: "Record inventory movement", icon: Boxes, phase: 4 },
-  { label: "Record expense", icon: Wallet, phase: 5 },
-  { label: "Record harvest", icon: Wheat, phase: 6 },
-  { label: "Record sale", icon: ShoppingCart, phase: 5 },
-  { label: "Take field photo", icon: Camera, phase: 6 },
-  { label: "Record GPS boundary", icon: Map },
+const QUICK_ACTIONS: { label: string; icon: LucideIcon; href: string }[] = [
+  { label: "Add a farm", icon: Map, href: "/farms/new" },
+  { label: "Plan a crop season", icon: Sprout, href: "/crops/plan" },
+  { label: "Create livestock batch", icon: Beef, href: "/livestock/new" },
+  { label: "Add inventory", icon: Boxes, href: "/inventory/new" },
+  { label: "Record expense", icon: Wallet, href: "/finance/journal/new" },
 ];
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
@@ -120,29 +74,11 @@ function AddSheet({ onClose }: { onClose: () => void }) {
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-black/10" />
         <h2 className="mb-3 text-base font-semibold">Quick actions</h2>
         <div className="grid grid-cols-2 gap-3">
-          {QUICK_ACTIONS.map(({ label, icon: Icon, phase }) => {
-            const upcoming = typeof phase === "number";
-            return upcoming ? (
-              <span
-                key={label}
-                className="flex cursor-default flex-col items-start gap-2 rounded-2xl border border-black/5 bg-black/[0.02] p-3.5 text-sm text-muted-foreground/60"
-                title={`Coming in Phase ${phase}`}
-              >
-                <Icon className="h-5 w-5" />
-                {label}
-              </span>
-            ) : (
-              <Link
-                key={label}
-                href="/farms/new"
-                onClick={onClose}
-                className="flex flex-col items-start gap-2 rounded-2xl border border-black/5 bg-white p-3.5 text-sm active:bg-black/[0.04]"
-              >
-                <Icon className="h-5 w-5 text-primary-600" />
-                {label}
-              </Link>
-            );
-          })}
+          {QUICK_ACTIONS.map(({ label, icon: Icon, href }) => (
+            <Link key={label} href={href} onClick={onClose} className="flex flex-col items-start gap-2 rounded-2xl border border-black/5 bg-white p-3.5 text-sm active:bg-black/[0.04]">
+              <Icon className="h-5 w-5 text-primary-600" />{label}
+            </Link>
+          ))}
         </div>
       </div>
     </div>
@@ -154,13 +90,13 @@ function BottomNav() {
   const [addOpen, setAddOpen] = useState(false);
   const homeActive = pathname.startsWith("/dashboard");
   const mapActive = pathname.startsWith("/farms") || pathname.startsWith("/map");
-  const tasksActive = pathname.startsWith("/tasks");
-  const moreActive = !homeActive && !mapActive && !tasksActive && !addOpen;
+  const cropsActive = pathname.startsWith("/crops");
+  const financeActive = pathname.startsWith("/finance");
 
   return (
     <>
       {addOpen && <AddSheet onClose={() => setAddOpen(false)} />}
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-black/5 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden">
+      <nav aria-label="Main navigation" className="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-black/5 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgba(20,40,26,0.06)] backdrop-blur lg:hidden">
         <Link
           href="/dashboard"
           className={cn(
@@ -168,11 +104,11 @@ function BottomNav() {
             homeActive ? "font-medium text-primary-700" : "text-muted-foreground",
           )}
         >
-          <Home className="h-5 w-5" />
+            <Home className="h-5 w-5" />
           Home
         </Link>
         <Link
-          href="/farms"
+          href="/map"
           className={cn(
             "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px]",
             mapActive ? "font-medium text-primary-700" : "text-muted-foreground",
@@ -192,24 +128,24 @@ function BottomNav() {
           Add
         </button>
         <Link
-          href="/tasks"
+          href="/crops"
           className={cn(
             "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px]",
-            tasksActive ? "font-medium text-primary-700" : "text-muted-foreground",
+            cropsActive ? "font-medium text-primary-700" : "text-muted-foreground",
           )}
         >
-          <ListTodo className="h-5 w-5" />
-          Tasks
+          <Sprout className="h-5 w-5" />
+          Crops
         </Link>
         <Link
-          href="/team"
+          href="/finance"
           className={cn(
             "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px]",
-            moreActive ? "font-medium text-primary-700" : "text-muted-foreground",
+            financeActive ? "font-medium text-primary-700" : "text-muted-foreground",
           )}
         >
-          <MoreHorizontal className="h-5 w-5" />
-          More
+          <Wallet className="h-5 w-5" />
+          Finance
         </Link>
       </nav>
     </>
@@ -237,39 +173,24 @@ export function Shell({
     <div className="min-h-screen pb-16 lg:pb-0">
       {/* Topbar */}
       <header className="sticky top-0 z-30 border-b border-black/5 bg-white/90 backdrop-blur">
-        <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
+        <div className="flex h-16 items-center gap-3 px-4 sm:px-6">
           {/* Brand (mobile) */}
           <Link href="/dashboard" className="flex items-center gap-2 lg:hidden">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-white">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#174c35] text-white shadow-sm">
               <Leaf className="h-4 w-4" />
             </span>
-            <span className="text-base font-semibold tracking-tight">HUNDREDFOLD</span>
+            <span className="text-sm font-bold tracking-[.12em]">GOSHEN <span className="font-medium tracking-normal text-muted-foreground">OS</span></span>
           </Link>
 
-          {/* Search (desktop) */}
-          <div className="relative hidden w-full max-w-md lg:block">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
-            <input
-              type="search"
-              placeholder="Search farm, plot, livestock..."
-              className="w-full rounded-xl border border-black/10 bg-black/[0.02] py-2.5 pl-10 pr-4 text-sm outline-none transition placeholder:text-muted-foreground/60 focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/15"
-            />
-          </div>
+          <div className="hidden items-center gap-2 text-xs text-muted-foreground lg:flex"><span className="h-1.5 w-1.5 rounded-full bg-[#55a271]"/>Farm operations</div>
 
           <div className="ml-auto flex items-center gap-1.5">
-            <button
-              className="rounded-lg p-2 text-muted-foreground hover:bg-black/5 hover:text-foreground"
-              title="Notifications (Phase 6)"
-            >
-              <Bell className="h-5 w-5" />
-            </button>
-
             {/* Org selector (mobile) */}
             {orgName && (
-              <button className="hidden max-w-[180px] items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-black/5 sm:flex lg:hidden">
+            <div className="hidden max-w-[180px] items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground sm:flex lg:hidden">
                 <span className="truncate">{orgName}</span>
                 <ChevronDown className="h-4 w-4 shrink-0" />
-              </button>
+            </div>
             )}
 
             {/* Account (desktop) */}
@@ -277,7 +198,7 @@ export function Shell({
               <button
                 onClick={signOut}
                 className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-black/5 hover:text-foreground"
-                title="Account"
+                title="Sign out"
               >
                 <span className="grid h-8 w-8 place-items-center rounded-full bg-primary-100 text-sm font-semibold text-primary-700">
                   {(userName || "U").slice(0, 1).toUpperCase()}
@@ -292,14 +213,15 @@ export function Shell({
 
       <div className="flex">
         {/* Sidebar (desktop) */}
-        <aside className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-64 shrink-0 flex-col overflow-y-auto border-r border-black/5 bg-white px-4 py-5 lg:flex">
-          <Link href="/dashboard" className="mb-6 flex items-center gap-2 px-2">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-white">
+        <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-64 shrink-0 flex-col overflow-y-auto border-r border-[#e7ebe6] bg-white px-4 py-6 lg:flex">
+          <Link href="/dashboard" className="mb-8 flex items-center gap-3 px-2">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#174c35] text-white shadow-sm">
               <Leaf className="h-5 w-5" />
             </span>
-            <span className="text-lg font-semibold tracking-tight">HUNDREDFOLD</span>
+            <span><span className="block text-sm font-bold tracking-[.12em]">GOSHEN OS</span><span className="mt-0.5 block text-[9px] font-semibold tracking-[.15em] text-muted-foreground">FARM OPERATIONS</span></span>
           </Link>
 
+          <div className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[.16em] text-[#98a39b]">Workspace</div>
           <nav className="flex flex-1 flex-col gap-0.5">
             {NAV.map((item) => (
               <NavLink
@@ -310,15 +232,7 @@ export function Shell({
             ))}
           </nav>
 
-          <div className="mt-4 border-t border-black/5 pt-3">
-            {MORE_ACTIONS.map((item) => (
-              <NavLink
-                key={item.href}
-                item={item}
-                active={pathname === item.href || pathname.startsWith(`${item.href}/`)}
-              />
-            ))}
-          </div>
+          <div className="mt-5 rounded-2xl bg-[#f2f6f1] p-3.5 text-[11px] leading-relaxed text-[#718076]">One clear view of your farms, fields, and daily work.</div>
         </aside>
 
         {/* Main */}
