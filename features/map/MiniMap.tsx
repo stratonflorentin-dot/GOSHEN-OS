@@ -27,5 +27,12 @@ export function MiniMap({ polygons }: { polygons: MapPolygon[] }) {
       </div>
     );
   }
-  return <FarmMap polygons={polygons} className="h-56 w-full rounded-2xl" showZoomControls={false} />;
+  return (
+    <FarmMap
+      polygons={polygons}
+      className="h-64 w-full rounded-xl sm:h-80 xl:h-[26rem]"
+      showZoomControls={false}
+      initialView="satellite"
+    />
+  );
 }
