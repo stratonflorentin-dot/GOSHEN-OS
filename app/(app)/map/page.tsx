@@ -48,6 +48,7 @@ export default async function MapPage() {
       farmName={farms.length === 1 ? farms[0].name : `${farms.length} farm locations`}
       polygons={polygons}
       plotPolygons={plotPolygons}
+      canEditBoundaries={["owner", "admin", "manager"].includes(memberships[0].role)}
       pendingNote={
         polygons.length === 0
           ? "No farm boundaries captured yet. Create a farm and walk its boundary to see it here."

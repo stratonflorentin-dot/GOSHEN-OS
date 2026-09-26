@@ -25,6 +25,8 @@ type Props = {
   showZoomControls?: boolean;
   initialView?: "streets" | "satellite";
   currentLocation?: MapLocation;
+  editableId?: string | null;
+  onEditPolygonChange?: (id: string, ring: [number, number][]) => void;
 };
 
 const SOURCE_ID = "goshen-farm-boundaries";
@@ -32,6 +34,8 @@ const SATELLITE_SOURCE_ID = "goshen-satellite";
 const LABEL_SOURCE_ID = "goshen-satellite-labels";
 const LOCATION_SOURCE_ID = "goshen-current-location";
 const TERRAIN_SOURCE_ID = "goshen-terrain-dem";
+const EDIT_VERTICES_SOURCE_ID = "goshen-edit-vertices";
+const EDIT_VERTICES_LAYER_ID = "goshen-edit-vertices-layer";
 
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_API_KEY?.trim();
 
@@ -119,6 +123,17 @@ function boundaryCollection(polygons: MapPolygon[]) {
   };
 }
 
+function editableVertexCollection(polygon?: MapPolygon) {
+  return {
+    type: "FeatureCollection" as const,
+    features: (polygon?.ring ?? []).map(([lat, lng], vertexIndex) => ({
+      type: "Feature" as const,
+      properties: { vertexIndex },
+      geometry: { type: "Point" as const, coordinates: [lng, lat] },
+    })),
+  };
+}
+
 function locationCollection(location?: MapLocation) {
   if (!location) return emptyCollection();
   const [lat, lng] = location.point;
@@ -173,6 +188,21 @@ function addOperationalLayers(map: MapLibreInstance) {
       paint: { "circle-radius": 7, "circle-color": "#1685f8", "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 },
     });
   }
+
+  if (!map.getSource(EDIT_VERTICES_SOURCE_ID)) {
+    map.addSource(EDIT_VERTICES_SOURCE_ID, { type: "geojson", data: editableVertexCollection() });
+    map.addLayer({
+      id: EDIT_VERTICES_LAYER_ID,
+      type: "circle",
+      source: EDIT_VERTICES_SOURCE_ID,
+      paint: {
+        "circle-radius": 8,
+        "circle-color": "#ffffff",
+        "circle-stroke-color": "#087f48",
+        "circle-stroke-width": 3,
+      },
+    });
+  }
 }
 
 function addSatelliteTerrain(map: MapLibreInstance) {
@@ -204,6 +234,8 @@ export default function MapLibreMap({
   showZoomControls = true,
   initialView = "streets",
   currentLocation,
+  editableId = null,
+  onEditPolygonChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreInstance | null>(null);
@@ -211,9 +243,14 @@ export default function MapLibreMap({
   const userMovedMapRef = useRef(false);
   const polygonsRef = useRef(polygons);
   const currentLocationRef = useRef(currentLocation);
+  const editableIdRef = useRef(editableId);
+  const onEditPolygonChangeRef = useRef(onEditPolygonChange);
+  const activeVertexDragRef = useRef<{ pointerId: number; polygonId: string; vertexIndex: number } | null>(null);
   const satelliteModeRef = useRef(initialView === "satellite");
   polygonsRef.current = polygons;
   currentLocationRef.current = currentLocation;
+  editableIdRef.current = editableId;
+  onEditPolygonChangeRef.current = onEditPolygonChange;
   const [view3d, setView3d] = useState(initialView === "satellite");
   const [tileError, setTileError] = useState(false);
   const firstPolygon = polygons[0];
@@ -243,6 +280,8 @@ export default function MapLibreMap({
       const latestLocation = currentLocationRef.current;
       const latestPolygons = polygonsRef.current;
       addOperationalLayers(map);
+      const editablePolygon = latestPolygons.find((polygon) => polygon.id === editableIdRef.current);
+      (map.getSource(EDIT_VERTICES_SOURCE_ID) as GeoJSONSource).setData(editableVertexCollection(editablePolygon));
       if (satelliteModeRef.current) addSatelliteTerrain(map);
       (map.getSource(SOURCE_ID) as GeoJSONSource).setData(boundaryCollection(latestPolygons));
       (map.getSource(LOCATION_SOURCE_ID) as GeoJSONSource).setData(locationCollection(latestLocation));
@@ -274,15 +313,76 @@ export default function MapLibreMap({
     const resizeObserver = new ResizeObserver(() => map.resize());
     resizeObserver.observe(containerRef.current);
 
+    const canvas = map.getCanvas();
+    const onPointerDown = (event: PointerEvent) => {
+      const polygonId = editableIdRef.current;
+      if (!polygonId) return;
+      const bounds = canvas.getBoundingClientRect();
+      const point: [number, number] = [event.clientX - bounds.left, event.clientY - bounds.top];
+      const vertex = map.queryRenderedFeatures(point, { layers: [EDIT_VERTICES_LAYER_ID] })[0];
+      if (!vertex) return;
+      const vertexIndex = Number(vertex.properties?.vertexIndex);
+      if (!Number.isInteger(vertexIndex)) return;
+      activeVertexDragRef.current = { pointerId: event.pointerId, polygonId, vertexIndex };
+      event.preventDefault();
+      event.stopPropagation();
+      canvas.setPointerCapture(event.pointerId);
+      map.dragPan.disable();
+      canvas.style.cursor = "grabbing";
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      const drag = activeVertexDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      const bounds = canvas.getBoundingClientRect();
+      const [lng, lat] = map.unproject([event.clientX - bounds.left, event.clientY - bounds.top]).toArray();
+      const nextPolygons = polygonsRef.current.map((polygon) => {
+        if (polygon.id !== drag.polygonId || !polygon.ring[drag.vertexIndex]) return polygon;
+        const nextRing = polygon.ring.map((vertexPoint, index) =>
+          index === drag.vertexIndex ? [lat, lng] as [number, number] : vertexPoint,
+        );
+        onEditPolygonChangeRef.current?.(polygon.id, nextRing);
+        return { ...polygon, ring: nextRing };
+      });
+      polygonsRef.current = nextPolygons;
+      (map.getSource(SOURCE_ID) as GeoJSONSource | undefined)?.setData(boundaryCollection(nextPolygons));
+      const editedPolygon = nextPolygons.find((polygon) => polygon.id === drag.polygonId);
+      (map.getSource(EDIT_VERTICES_SOURCE_ID) as GeoJSONSource | undefined)?.setData(editableVertexCollection(editedPolygon));
+    };
+    const finishPointerDrag = (event: PointerEvent) => {
+      const drag = activeVertexDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      activeVertexDragRef.current = null;
+      if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+      map.dragPan.enable();
+      canvas.style.cursor = editableIdRef.current ? "grab" : "";
+    };
+    canvas.addEventListener("pointerdown", onPointerDown, true);
+    canvas.addEventListener("pointermove", onPointerMove, true);
+    canvas.addEventListener("pointerup", finishPointerDrag, true);
+    canvas.addEventListener("pointercancel", finishPointerDrag, true);
+
     return () => {
       themeObserver.disconnect();
       resizeObserver.disconnect();
+      canvas.removeEventListener("pointerdown", onPointerDown, true);
+      canvas.removeEventListener("pointermove", onPointerMove, true);
+      canvas.removeEventListener("pointerup", finishPointerDrag, true);
+      canvas.removeEventListener("pointercancel", finishPointerDrag, true);
       map.remove();
       mapRef.current = null;
     };
     // Map setup is intentionally one-time; the sources are updated below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map?.isStyleLoaded() || !map.getSource(EDIT_VERTICES_SOURCE_ID)) return;
+    const editablePolygon = polygons.find((polygon) => polygon.id === editableId);
+    (map.getSource(EDIT_VERTICES_SOURCE_ID) as GeoJSONSource).setData(editableVertexCollection(editablePolygon));
+    map.getCanvas().style.cursor = editableId ? "grab" : "";
+    map.getCanvas().style.touchAction = editableId ? "none" : "";
+  }, [editableId, polygons]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -321,6 +421,8 @@ export default function MapLibreMap({
       if (next) addSatelliteTerrain(map);
       (map.getSource(SOURCE_ID) as GeoJSONSource).setData(boundaryCollection(polygons));
       (map.getSource(LOCATION_SOURCE_ID) as GeoJSONSource).setData(locationCollection(currentLocation));
+      const editablePolygon = polygons.find((polygon) => polygon.id === editableIdRef.current);
+      (map.getSource(EDIT_VERTICES_SOURCE_ID) as GeoJSONSource).setData(editableVertexCollection(editablePolygon));
       if (next) {
         // Use a pitched MapLibre camera over satellite imagery, with hybrid
         // labels when MapTiler is configured.
@@ -336,7 +438,7 @@ export default function MapLibreMap({
   return (
     <div className="relative h-full w-full overflow-hidden rounded-[inherit] bg-muted">
       <div ref={containerRef} className={className ?? "h-full w-full"} />
-      {showZoomControls && <div className="absolute left-3 top-3 z-10 inline-flex rounded-xl border border-border/70 bg-card/95 p-1 shadow-md backdrop-blur">
+      {showZoomControls && !editableId && <div className="absolute left-3 top-3 z-10 inline-flex rounded-xl border border-border/70 bg-card/95 p-1 shadow-md backdrop-blur">
         <button
           type="button"
           onClick={view3d ? toggle3dSatellite : undefined}

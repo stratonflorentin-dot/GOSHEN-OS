@@ -89,6 +89,39 @@ export async function createFarm(userId: string, input: CreateFarmInput): Promis
   });
 }
 
+/** Save a manually adjusted farm fence and append an immutable boundary history record. */
+export async function updateFarmBoundary(
+  userId: string,
+  organizationId: string,
+  farmId: string,
+  boundaryGeoJson: string,
+): Promise<void> {
+  return withUser(userId, async (db) => {
+    const rows = await db`
+      with candidate as (
+        select ST_SetSRID(ST_GeomFromGeoJSON(${boundaryGeoJson}), 4326) as geom
+      ), updated as (
+        update public.farms f
+        set boundary = candidate.geom,
+            boundary_source = 'manual_draw'
+        from candidate
+        where f.id = ${farmId}
+          and f.organization_id = ${organizationId}
+          and ST_IsValid(candidate.geom)
+        returning f.id, f.organization_id, f.boundary, f.area_m2
+      )
+      insert into public.farm_boundary_versions
+        (farm_id, organization_id, boundary, source, point_count, area_m2, perimeter_m)
+      select id, organization_id, boundary, 'manual_draw',
+             greatest(ST_NPoints(ST_ExteriorRing(boundary)) - 1, 0),
+             area_m2, ST_Perimeter(boundary::geography)
+      from updated
+      returning farm_id
+    `;
+    if (!rows[0]) throw new Error("BOUNDARY_INVALID_OR_NOT_ALLOWED");
+  });
+}
+
 export async function listFarms(
   userId: string,
   organizationId: string,

@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { MapPinned, Layers, Eye, EyeOff, LocateFixed, Radio, RadioTower, Box } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { MapPinned, Layers, Eye, EyeOff, LocateFixed, Radio, RadioTower, Box, Pencil, Save, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { pointInPolygon } from "@/lib/geo";
 import type { MapLocation, MapPolygon } from "./MapLibreMap";
+import { saveFarmBoundaryAction } from "@/app/(app)/map/actions";
 
 const FarmMap = dynamic(() => import("./MapLibreMap"), {
   ssr: false,
@@ -29,25 +31,35 @@ export function MapWorkspace({
   polygons,
   plotPolygons,
   pendingNote,
+  canEditBoundaries,
 }: {
   farmName: string;
   polygons: MapPolygon[];
   plotPolygons: MapPolygon[];
   pendingNote?: string;
+  canEditBoundaries: boolean;
 }) {
+  const router = useRouter();
   const [visible, setVisible] = useState<Record<LayerKey, boolean>>({ farm: true, plots: false });
   const [selected, setSelected] = useState<string | null>(null);
+  const [editableId, setEditableId] = useState<string | null>(null);
+  const [editedPolygons, setEditedPolygons] = useState<MapPolygon[]>([]);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSaved, setEditSaved] = useState(false);
+  const [isSaving, startSaving] = useTransition();
   const [location, setLocation] = useState<MapLocation>();
   const [tracking, setTracking] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [transition, setTransition] = useState<string | null>(null);
   const watchId = useRef<number | null>(null);
   const lastFence = useRef<string | null | undefined>(undefined);
+  const workingFarms = polygons.map((polygon) => editedPolygons.find((edited) => edited.id === polygon.id) ?? polygon);
   const displayedPolygons = [
-    ...(visible.farm ? polygons : []),
+    ...(visible.farm ? workingFarms : []),
     ...(visible.plots ? plotPolygons : []),
   ];
   const selectedPolygon = displayedPolygons.find((p) => p.id === selected) ?? null;
+  const editingPolygon = workingFarms.find((polygon) => polygon.id === editableId) ?? null;
   const currentFence = location
     ? polygons.find((polygon) => pointInPolygon(location.point, polygon.ring)) ?? null
     : null;
@@ -106,15 +118,53 @@ export function MapWorkspace({
     );
   }
 
+  function beginBoundaryEdit() {
+    if (!selectedPolygon || !polygons.some((polygon) => polygon.id === selectedPolygon.id)) return;
+    setEditedPolygons((current) => [
+      ...current.filter((polygon) => polygon.id !== selectedPolygon.id),
+      { ...selectedPolygon, ring: selectedPolygon.ring.map((point) => [...point] as [number, number]) },
+    ]);
+    setEditableId(selectedPolygon.id);
+    setEditError(null);
+    setEditSaved(false);
+  }
+
+  function cancelBoundaryEdit() {
+    setEditableId(null);
+    setEditedPolygons([]);
+    setEditError(null);
+  }
+
+  function saveBoundaryEdit() {
+    if (!editingPolygon || isSaving) return;
+    setEditError(null);
+    setEditSaved(false);
+    startSaving(async () => {
+      try {
+        const result = await saveFarmBoundaryAction({ farmId: editingPolygon.id, ring: editingPolygon.ring });
+        if (result.error) {
+          setEditError(result.error);
+          return;
+        }
+        setEditableId(null);
+        setEditedPolygons([]);
+        setEditSaved(true);
+        router.refresh();
+      } catch {
+        setEditError("Could not save the farm boundary. Please check your connection and try again.");
+      }
+    });
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="eyebrow">Land &amp; GIS <span className="px-1.5">/</span> {farmName}</p>
           <h1 className="page-title mt-1">Farm map</h1>
           <p className="mt-1 text-sm text-muted-foreground">Satellite imagery, farm boundaries, and live GPS geofencing.</p>
         </div>
-        <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex flex-wrap justify-start gap-2 sm:justify-end">
           <Link href="/map/view3d" className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
             <Box className="h-4 w-4" /> 3D terrain
           </Link>
@@ -122,6 +172,7 @@ export function MapWorkspace({
             <button
               type="button"
               onClick={toggleGeofence}
+              disabled={Boolean(editableId)}
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted",
                 tracking && "border-primary bg-primary-50 text-primary-800 dark:bg-primary-800 dark:text-white",
@@ -135,8 +186,25 @@ export function MapWorkspace({
           <Link href="/farms/new" className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary-600 sm:px-4">
             <MapPinned className="h-4 w-4" /> Record boundary
           </Link>
+          {canEditBoundaries && selectedPolygon && polygons.some((polygon) => polygon.id === selectedPolygon.id) && !editableId && (
+            <button type="button" onClick={beginBoundaryEdit} className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted">
+              <Pencil className="h-4 w-4" /> Edit fence
+            </button>
+          )}
         </div>
       </div>
+
+      {editableId && editingPolygon && (
+        <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm">Drag the white handles to reshape <span className="font-semibold">{editingPolygon.name}</span>. Changes are saved when you press Save fence.</p>
+          <div className="flex shrink-0 gap-2">
+            <button type="button" onClick={cancelBoundaryEdit} disabled={isSaving} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-medium disabled:opacity-60"><X className="h-4 w-4" /> Cancel</button>
+            <button type="button" onClick={saveBoundaryEdit} disabled={isSaving} className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-white disabled:opacity-60"><Save className="h-4 w-4" /> {isSaving ? "Saving…" : "Save fence"}</button>
+          </div>
+        </div>
+      )}
+      {editError && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{editError}</p>}
+      {editSaved && <p role="status" className="text-sm text-primary">Farm boundary saved.</p>}
 
       {(tracking || gpsError || transition) && (
         <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-border bg-card px-4 py-3 text-sm">
@@ -163,8 +231,9 @@ export function MapWorkspace({
               <li key={key}>
                 {ready ? (
                   <button
+                    disabled={Boolean(editableId)}
                     onClick={() => setVisible((v) => ({ ...v, [key]: !v[key] }))}
-                    className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-sm hover:bg-black/[0.04]"
+                    className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-sm hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {label}
                     {visible[key] ? (
@@ -198,6 +267,12 @@ export function MapWorkspace({
                 polygons={displayedPolygons}
                 selectedId={selected}
                 onSelect={setSelected}
+                editableId={editableId}
+                onEditPolygonChange={(id, ring) => setEditedPolygons((current) => {
+                  const existing = current.find((polygon) => polygon.id === id) ?? polygons.find((polygon) => polygon.id === id);
+                  if (!existing) return current;
+                  return [...current.filter((polygon) => polygon.id !== id), { ...existing, ring }];
+                })}
                 currentLocation={location}
                 initialView="satellite"
                 className="h-full w-full"
@@ -220,7 +295,7 @@ export function MapWorkspace({
               </p>
             ) : (
                 <p className="text-muted-foreground">
-                Select a recorded farm or plot boundary to inspect its mapped area.
+                {editableId ? "Drag the white fence handles to move the boundary points." : "Select a farm boundary to inspect it, then use Edit fence to adjust its points."}
               </p>
             )}
           </div>
