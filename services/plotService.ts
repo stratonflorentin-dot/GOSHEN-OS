@@ -92,7 +92,7 @@ export async function createPlot(userId: string, input: CreatePlotInput): Promis
           values
             (${input.organizationId}, ${input.farmId}, ${input.parentPlotId || null},
              ${input.name}, ${input.code}, ${input.plotType},
-             ST_GeomFromGeoJSON(${geometry}, 4326),
+             ST_SetSRID(ST_GeomFromGeoJSON(${geometry}), 4326),
              ${input.boundarySource || "manual_draw"},
              ${input.landUse}, ${input.irrigationType || null}, ${input.soilTexture || null},
              ${input.slopePercent ?? null}, ${input.elevationM ?? null},
@@ -145,15 +145,15 @@ async function recordPlotBoundaryVersion(
        area_m2, perimeter_m, created_by)
     select
       ${args.plotId}, ${args.organizationId},
-      ST_GeomFromGeoJSON(${args.geometry}, 4326),
+      ST_SetSRID(ST_GeomFromGeoJSON(${args.geometry}), 4326),
       ${args.source},
       ${args.rawGpsPoints}::jsonb,
       case
         when ${args.rawGpsPoints}::jsonb is null then null
         else jsonb_array_length(${args.rawGpsPoints}::jsonb)
       end,
-      ST_Area(ST_GeomFromGeoJSON(${args.geometry}, 4326)::geography),
-      ST_Perimeter(ST_GeomFromGeoJSON(${args.geometry}, 4326)::geography),
+      ST_Area(ST_SetSRID(ST_GeomFromGeoJSON(${args.geometry}), 4326)::geography),
+      ST_Perimeter(ST_SetSRID(ST_GeomFromGeoJSON(${args.geometry}), 4326)::geography),
       ${userId}
   `;
 }
@@ -165,7 +165,7 @@ export async function updatePlotBoundary(
   return withUser(userId, async (db) => {
     const rows = await db`
       update public.plots
-      set geometry = ST_GeomFromGeoJSON(${input.boundaryGeoJson}, 4326),
+      set geometry = ST_SetSRID(ST_GeomFromGeoJSON(${input.boundaryGeoJson}), 4326),
           boundary_source = ${input.boundarySource}
       where id = ${input.plotId}
       returning *

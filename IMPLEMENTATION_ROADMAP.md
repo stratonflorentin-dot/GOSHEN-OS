@@ -8,6 +8,7 @@ The product brief defines a multi-tenant commercial platform. Deliver it as test
 - [x] Map Better Auth schema fields to existing snake_case columns and correct `email_verified` type through a migration.
 - [x] Make successful signup use the authenticated dashboard and sanitize registration errors.
 - [x] Apply migration 0008 to the Neon database configured in `.env.production` without rotating application-role credentials.
+- [x] Fix the profile foreign key to reference the current `auth.user` table; apply migration 0009 to configured development and production databases.
 - [x] Push and confirm the updated registration page markup is visible on the live site.
 - [ ] Verify account creation and session creation with a disposable live test account.
 - [ ] Verify a disposable account can sign up, sign in, retain a session, and sign out on the live deployment.
@@ -16,6 +17,7 @@ The product brief defines a multi-tenant commercial platform. Deliver it as test
 
 - [x] Add Vitest and focused auth-validation/GIS calculation unit tests.
 - [ ] Add database/RLS, signup/session, and domain-workflow integration tests.
+- [x] Repair and run tenant-isolation verification against the configured development database.
 - [ ] Add lint script/config and CI checks for typecheck, unit tests, build, and migration checks.
 - [ ] Resolve duplicate `0006` migration prefixes and document the actual migration ledger.
 - [ ] Replace/deprecate the legacy auth migration script; avoid secret/role changes as an incidental effect of schema deployment.
@@ -34,11 +36,13 @@ The product brief defines a multi-tenant commercial platform. Deliver it as test
 - [ ] Inventory every domain table and classify global reference versus organization/farm-owned data.
 - [ ] Audit every RLS policy and owner/app role grant.
 - [ ] Test Organization A/B isolation and worker/accountant/manager access boundaries on a disposable PostgreSQL database.
+- [x] Test Organization A/B isolation and cross-tenant writes for the configured development app role.
 - [ ] Add audit events for sensitive membership, finance, and boundary changes.
 
 ## Stage 4 — Farm and GIS vertical slice
 
 - [ ] Finish farm boundary capture on a smartphone: start/pause/resume/finish, accuracy/jump checks, closure/self-intersection validation, area/perimeter, and persisted PostGIS geometry.
+- [x] Correct farm/plot GeoJSON parsing to use supported PostGIS function signatures and explicitly set SRID 4326.
 - [ ] Add manual edit/import flows with failure-safe preview and validation.
 - [ ] Verify map behavior offline/online and choose one primary map library after feature comparison.
 - [ ] Build farm → plot → boundary → crop assignment and test geometry integrity.

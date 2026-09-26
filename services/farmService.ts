@@ -69,7 +69,7 @@ export async function createFarm(userId: string, input: CreateFarmInput): Promis
            ${input.farmType}, ${input.ownershipType || null},
            ${input.country}, ${input.region || null}, ${input.district || null},
            ${input.ward || null}, ${input.village || null}, ${input.address || null},
-           ST_GeomFromGeoJSON(${geojson}, 4326), 'gps_walk')
+           ST_SetSRID(ST_GeomFromGeoJSON(${geojson}), 4326), 'gps_walk')
         returning *
       `;
     } else {

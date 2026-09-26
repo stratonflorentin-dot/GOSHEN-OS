@@ -6,7 +6,7 @@
 
 ## Scope and evidence
 
-This is a repository review plus read-only inspection of the live home and registration pages. The production home describes a device-local workspace; before the fix, `/register` displayed “Could not create your account.” After pushing the fix, the live registration HTML reflects the updated form (including the 72-character password limit). The live auth session endpoint returns HTTP 200 with no session, and an invalid signup payload returns an input validation error without writing an account. No valid account was submitted, so database-backed signup/session creation still needs an end-to-end check with a disposable test account. The local project typecheck and production Webpack build were run. The build command using default Turbopack is blocked by an invalid local Windows native binding. Vitest and seven focused unit tests pass. No automated desktop/tablet/mobile browser matrix or tenant-isolation end-to-end suite exists, so those behaviors are not certified by this audit.
+This is a repository review, live page inspection, and targeted database verification. Production `/register` reflects the updated form and invalid signup payloads are rejected without writing an account. A valid live signup/session has not been exercised. Migration 0009 is applied to the configured development and production databases. Tenant-isolation verification passes its two-tenant checks on the configured development database, including anonymous isolation, tenant reads/writes, privilege escalation, and append-only policies. GeoJSON parsing was checked against configured PostGIS and corrected to supported function signatures. Seven Vitest unit tests pass. No automated desktop/tablet/mobile browser matrix exists, so responsive behavior and phone workflows are not certified.
 
 ## What exists
 
@@ -23,9 +23,9 @@ This is a repository review plus read-only inspection of the live home and regis
 | Area | Decision | Evidence / next action |
 | --- | --- | --- |
 | Existing local workspace and backup | Keep | Useful no-account entry point; explain clearly that it is device-only and is not synced to a farm account. |
-| Better Auth with PostgreSQL | Refactor | The raw `postgres.js` tagged client was passed directly as a Better Auth database. The sign-up failure and database errors are consistent with that unsupported adapter shape. A Kysely Postgres.js dialect and explicit schema/field mappings are now in the working tree. |
-| Authentication schema | Refactor | The handwritten auth migration used snake_case columns, while Better Auth defaults to different field names; `email_verified` was also a timestamp instead of a boolean. Signup alignment migration and explicit mappings are now in the working tree. Production application of that migration remains unverified. |
-| Organization and farm schema/RLS | Keep, then verify | PostgreSQL migrations define the tenant model and many RLS policies. Run the existing RLS verification against a disposable/test database and review every sensitive table and policy before commercial use. |
+| Better Auth with PostgreSQL | Refactor | Kysely Postgres.js dialect and explicit schema/field mappings are deployed. The current Better Auth user table is `auth.user`. |
+| Authentication schema | Refactor | Migration 0008 and explicit Better Auth field mappings align the current `auth` schema; migration 0009 aligns the profile foreign key. Both migrations were applied in schema-only mode to the configured production database. |
+| Organization and farm schema/RLS | Keep, then verify | PostgreSQL migrations define tenant policies. The focused two-tenant RLS verification now passes against configured development; the complete policy matrix and assigned-farm role matrix still need coverage. |
 | MapLibre and Leaflet | Refactor later | Both stacks are dependencies; MapLibre is used for the 3D scene while Leaflet/React Leaflet remains. Choose one primary stack after comparing feature coverage and map pages. |
 | 3D/Cesium | Keep fallback; document status | The MapLibre extrusion path exists. Cesium token-dependent support is disabled/falls back; do not present it as an active Cesium integration. |
 | Weather | Keep provider interface; fix presentation | Mock provider returns generated values and is selected by default. Make mock status unmistakable in UI and production configuration; do not present mock forecasts as observations. |
@@ -44,11 +44,12 @@ This is a repository review plus read-only inspection of the live home and regis
 
 ### Broken or high-confidence defects
 
-- **Signup failed in production at audit time:** `/register` displayed a generic creation failure. In source, Better Auth received the raw `postgres.js` SQL-tag client rather than its Kysely dialect. The auth table names/types also did not match the existing schema. Migration 0008 has now been applied via schema-only migration mode to the Neon database configured in `.env.production`, and its auth columns/ledger were verified. The updated app code still needs to be deployed before the live registration route uses the fix.
+- **Signup previously failed:** the unsupported database adapter and mismatched auth schema have been corrected and deployed. A second onboarding blocker was found: `profiles.id` referenced retired `neon_auth.user`. Migration 0009 now points it at `auth.user` on configured development and production databases.
 - **Signup success UX was wrong:** email verification is disabled, but signup sent the user to a page instructing them to check email. It now routes to `/dashboard` and catches network exceptions in the working tree.
 - **Signup surfaced backend messages:** detailed auth/database errors could be shown in the browser. The updated signup maps known input errors and returns a safe generic message for other failures.
 - The initial `npm run test:unit` failed because Vitest was missing; Vitest and seven focused tests have now been added and pass. They do not replace database/RLS or end-to-end coverage.
 - The service-worker sync client calls `/api/gps/traces` and other synchronization endpoints that are absent from the inspected App Router routes. These queue types cannot be assumed to sync.
+- Farm and plot boundary writes called a two-argument `ST_GeomFromGeoJSON` signature not supported by the configured PostGIS installation. Those writes now parse with the supported function and set SRID 4326 explicitly.
 
 ### Partial / not verified end-to-end
 

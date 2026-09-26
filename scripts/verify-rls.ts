@@ -28,10 +28,9 @@ function loadEnv(file: string): Record<string, string> {
 }
 
 const env = { ...loadEnv(".env.local"), ...process.env };
-const ownerUrl: string | undefined = env.DATABASE_URL;
+const ownerUrl = env.DATABASE_URL!;
 if (!ownerUrl) {
-  console.error("DATABASE_URL missing.");
-  process.exit(1);
+  throw new Error("DATABASE_URL missing.");
 }
 const appUrl: string = env.DATABASE_URL_APP ?? ownerUrl;
 
@@ -67,9 +66,10 @@ async function cleanup() {
   await owner`delete from public.organization_members where organization_id in (${o1}, ${o2})`;
   await owner`delete from public.organizations where id in (${o1}, ${o2})`;
   await owner`delete from public.profiles where id in (${u1}, ${u2})`;
-  await owner`delete from neon_auth."user" where id in (${u1}, ${u2})`;
+  await owner`delete from auth."user" where id in (${u1}, ${u2})`;
 }
 
+async function main() {
 try {
   console.log(`owner role : ${new URL(ownerUrl).username}`);
   console.log(`app   role : ${new URL(appUrl).username}`);
@@ -85,7 +85,7 @@ try {
 
   // ---------------------------------------------------------------- fixtures
   await owner`
-    insert into neon_auth."user" (id, name, email, "emailVerified")
+    insert into auth."user" (id, name, email, email_verified)
     values
       (${u1}, 'RLS Probe One', ${`rls-probe-1-${stamp}@example.invalid`}, true),
       (${u2}, 'RLS Probe Two', ${`rls-probe-2-${stamp}@example.invalid`}, true)
@@ -222,3 +222,9 @@ if (failures > 0) {
   process.exit(1);
 }
 console.log("All RLS assertions passed.");
+}
+
+main().catch((error) => {
+  console.error("RLS verification failed:", error instanceof Error ? error.message : "unknown error");
+  process.exitCode = 1;
+});
