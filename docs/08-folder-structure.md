@@ -1,5 +1,10 @@
 # 08 — Folder Structure
 
+This is the target modular layout, not a literal inventory of files currently
+present. Current implementation uses `lib/db/`, `lib/auth/`,
+`db/migrations/`, `services/`, `features/`, and App Router pages. Modules and
+test folders marked below are planned until corresponding code and checks exist.
+
 Next.js App Router monorepo layout. Modules are isolated: each `features/<m>`
 owns its components/hooks; shared logic lives in `services/` and `lib/`.
 
@@ -65,9 +70,10 @@ goshen-os/
 │       ├── satellite/        # interface.ts, pending.ts
 │       ├── market/           # interface.ts, manual.ts, pending.ts
 │       ├── ai/               # interface.ts, provider.ts
-│       └── storage/          # supabaseStorage.ts
+│       └── storage/          # provider adapter (planned)
 ├── lib/
-│   ├── supabase/             # browser.ts, server.ts, service-role.ts (server-only!)
+│   ├── db/                   # index.ts (postgres.js owner/app-role clients)
+│   ├── auth/                 # Better Auth server/client/session helpers
 │   ├── domain/               # PURE calculation functions (unit + property tested)
 │   │   ├── geo.ts            # area, perimeter, polygon validation
 │   │   ├── profitability.ts  # margins, per-hectare metrics
@@ -84,14 +90,14 @@ goshen-os/
 │   ├── maps/                 # MapLibre container, layer controls, popups
 │   └── layout/               # shell, sidebar, topbar, mobile nav
 ├── types/                    # generated DB types + domain types
-├── supabase/
-│   ├── migrations/           # numbered SQL from docs/03
-│   ├── functions/            # Edge Functions (webhooks, scheduled jobs)
-│   └── seed/
+├── db/
+│   └── migrations/           # deployed numbered SQL migrations
+├── scripts/
+│   └── migrate.ts            # migration runner and app-role provisioning
 ├── analytics-py/             # optional Python service (Phase 7+)
 ├── tests/
 │   ├── unit/                 # Vitest — lib/domain focus
-│   ├── integration/          # services against local Supabase
+│   ├── integration/          # services against disposable PostgreSQL
 │   ├── rls/                  # pgTAP tenant-isolation suites
 │   ├── e2e/                  # Playwright journeys (docs/10)
 │   └── property/             # fast-check property tests
@@ -107,9 +113,9 @@ goshen-os/
 2. **`features/<m>/` may import** from `services/`, `lib/`, `components/`, and
    its own folder. It must **not** import from another feature (extract shared
    pieces to `components/` or a service).
-3. **`lib/supabase/service-role.ts`** is server-only; ESLint
-   `no-restricted-imports` blocks it from anything under `app/**` client
-   components and `features/**` client files.
+3. **Database clients in `lib/db/` are server-only.** The owner connection is
+   reserved for auth, migrations, and trusted jobs; tenant requests use the
+   non-owner app role and `withUser()` so RLS applies.
 4. **`lib/domain/` has zero I/O** — pure functions only. This is where
    testable calculations live (areas, profitability, FCR).
 5. **No `Tanzania`/`Bagamoyo` literals anywhere in code** — locale data lives in

@@ -6,8 +6,8 @@
 |---|---|---|---|
 | Unit | Vitest | `lib/domain/` pure functions: area math, profitability, FCR, mortality, moving-average cost, unit conversion, money/fx | every PR (fast) |
 | Property | fast-check | Invariants: allocation sums ≤ source; conversions invert; ledger replay == cached balances; journal always balances | every PR |
-| Database/RLS | pgTAP against local Supabase | Every migration: tenant isolation, role floors, immutability triggers, negative-stock rejection, batch-count triggers | every PR (blocking) |
-| Integration | Vitest + local Supabase | Service flows: procurement chain, activity→movement→allocation, sync batch apply, reversal flow | every PR |
+| Database/RLS | pgTAP against disposable PostgreSQL | Every migration: tenant isolation, role floors, immutability triggers, negative-stock rejection, batch-count triggers | target CI gate |
+| Integration | Vitest + disposable PostgreSQL | Service flows: procurement chain, activity→movement→allocation, sync batch apply, reversal flow | target CI gate |
 | E2E | Playwright | User journeys (docs/10), mobile viewport, offline mode, export downloads | PRs touching app/services; nightly full |
 | Load | k6 (Phase 13) | 5,000-plot farm aggregates, map tiles, sync bursts | pre-release |
 

@@ -41,7 +41,7 @@ references a specific farm name.
 │  - 3D scene (extrusion → Cesium)    - Quick activity/task entry      │
 │  - Dashboards (ECharts)             - IndexedDB outbox + cache       │
 └───────────────┬──────────────────────────────────────────────────────┘
-                │ HTTPS (Supabase JS, anon key + RLS)  /  REST (Next API)
+                │ HTTPS (Next.js Server Components/Actions/Route Handlers)
 ┌───────────────▼──────────────────────────────────────────────────────┐
 │ APPLICATION TIER (Vercel) — Next.js                                  │
 │  app/ (UI)  →  features/ (module UX)  →  services/ (business logic)  │
@@ -52,13 +52,12 @@ references a specific farm name.
 └───────────────┬───────────────────────────────┬──────────────────────┘
                 │                               │
 ┌───────────────▼───────────────┐   ┌───────────▼──────────────────────┐
-│ SUPABASE                      │   │ EXTERNAL SERVICES (via adapters) │
-│  Auth (email/phone/OAuth)     │   │  Weather API (adapter, pending)  │
-│  Postgres 15 + PostGIS        │   │  Satellite/NDVI API (pending)    │
-│   + pgvector, RLS everywhere  │   │  Market data API (pending)       │
-│  Storage (private buckets)    │   │  LLM provider (server key only)  │
-│  Realtime (notifications)     │   │  Map tiles / terrain provider    │
-│  Edge Functions (webhooks)    │   │                                  │
+│ NEON / POSTGRES               │   │ EXTERNAL SERVICES (via adapters) │
+│  Better Auth identity schema  │   │  Weather API (adapter, pending)  │
+│  Postgres + PostGIS           │   │  Satellite/NDVI API (pending)    │
+│  RLS tenant policies          │   │  Market data API (pending)       │
+│  App role + transaction UID   │   │  LLM provider (server key only)  │
+│  Storage/realtime: future     │   │  Map tiles / terrain provider    │
 └───────────────────────────────┘   └──────────────────────────────────┘
                 │
 ┌───────────────▼──────────────────────────────────────────────────────┐
@@ -77,11 +76,12 @@ references a specific farm name.
    `weatherService`, `aiService`, `reportService`, `taskService`, etc.
    All authorization-relevant logic, validation, and orchestration lives here.
    Services are plain TypeScript modules usable from Server Components, Route
-   Handlers, and Edge Functions.
-3. **Data layer**: Supabase client wrappers (`browser` anon client, `server`
-   cookie-bound client, `serviceRole` — server-only, for platform admin and
-   system jobs). Postgres views/RPCs encapsulate complex queries. **RLS is the
-   final authority** even for service-layer checks.
+   Handlers, and scheduled/server jobs.
+3. **Data layer**: server-only `postgres.js` clients. Auth uses the owner
+   connection; tenant data uses `DATABASE_URL_APP` with a non-owner role and
+   `withUser()` transaction context (`app.user_id`). `public.app_uid()` and
+   RLS policies enforce tenant access. Never expose database credentials to
+   the browser.
 4. **Integration layer** (`services/adapters/`): every external vendor sits
    behind an interface. If no provider is connected, the adapter is marked
    `PENDING` and returns a typed "unavailable" result — **never fabricated
@@ -135,8 +135,9 @@ consumption (inventory out) → mortality/sales events → revenue → batch P&L
   farm-scoped). See `05-security-model.md` for the full policy set.
 - Postgres RLS is **forced** (tables are not readable via `security definer`
   bypass except through explicit audited helpers).
-- Platform super admins never read tenant tables directly; they use audited
-  server routes with the service role, and admin access itself is logged.
+- Platform super admins use audited server routes; owner credentials are
+  reserved for auth, migrations, and explicitly trusted platform jobs, never
+  ordinary tenant requests.
 - A synthetic tenant-isolation test suite (pgTAP) must pass in CI for every
   migration (see `18-testing-strategy.md`).
 

@@ -19,8 +19,8 @@ GOSHEN OS is a multi-tenant SaaS platform for managing agricultural businesses i
 
 - **Frontend**: Next.js 16 (App Router) + React 19 + TypeScript + Tailwind CSS
 - **Database**: PostgreSQL 15+ with PostGIS 3.4 and pgvector on Neon
-- **Auth**: Better Auth with email verification
-- **Maps**: MapLibre GL JS + Leaflet, CesiumJS for 3D
+- **Auth**: Better Auth with email/password (email verification is currently disabled)
+- **Maps**: MapLibre GL JS for 2D and oblique satellite views; CesiumJS terrain globe is planned
 - **Charts**: Apache ECharts
 - **Offline**: PWA + Service Worker + IndexedDB
 - **State**: TanStack Query pattern (server state focus)
@@ -80,7 +80,8 @@ GOSHEN OS is a multi-tenant SaaS platform for managing agricultural businesses i
 Our codebase follows these patterns:
 - Service layer for business logic (`services/*.ts`)
 - Database access via postgres.js with tagged template literals
-- Row Level Security (RLS) via Better Auth
+- Row Level Security (RLS) via PostgreSQL policies. Better Auth verifies the
+  session; server-side `withUser()` sets transaction-local `app.user_id`.
 - Server Actions for form submissions
 - Route Handlers for API endpoints
 - TanStack Query pattern for server state management

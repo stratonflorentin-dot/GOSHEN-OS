@@ -19,7 +19,7 @@ import { haversineM, pathLengthM, polygonAreaM2, accuracyLabel } from "@/lib/geo
 import { formatHa } from "@/lib/format";
 import { createFarmAction } from "./actions";
 
-const LeafletMap = dynamic(() => import("@/features/map/LeafletMap"), {
+const FarmMap = dynamic(() => import("@/features/map/MapLibreMap"), {
   ssr: false,
   loading: () => (
     <div className="grid h-full w-full place-items-center bg-muted/50 text-sm text-muted-foreground">
@@ -298,8 +298,8 @@ export default function NewFarmPage() {
           </div>
 
           <div className="mt-3 h-72 overflow-hidden rounded-2xl border border-black/5 sm:h-96">
-            <LeafletMap
-              polygons={points.length >= 3 ? [{ id: "walk", name: "Boundary", ring: points }] : []}
+            <FarmMap
+              polygons={points.length >= 2 ? [{ id: "walk", name: "Boundary", ring: points }] : []}
               center={coords ?? undefined}
               zoom={17}
               showZoomControls={false}
@@ -374,8 +374,8 @@ export default function NewFarmPage() {
 
       <div className="card mt-5 p-5">
         <div className="h-56 overflow-hidden rounded-2xl border border-black/5">
-          <LeafletMap
-            polygons={[{ id: "preview", name: "Boundary", ring: points }]}
+          <FarmMap
+            polygons={points.length >= 2 ? [{ id: "preview", name: "Boundary", ring: points }] : []}
             showZoomControls={false}
           />
         </div>

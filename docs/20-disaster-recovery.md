@@ -1,54 +1,60 @@
 # 20 — Disaster Recovery Plan
 
-## 1. Objectives
+This is a recovery target and operating checklist, not evidence that backups,
+retention, or restore drills are already configured. Neon plan settings and
+Vercel secret configuration must be checked before relying on any RPO/RTO.
 
-| Metric | Target (v1) | Notes |
+## 1. Recovery Objectives
+
+| Metric | Target | Verification required |
 |---|---|---|
-| RPO (data loss window) | ≤ 5 min for Postgres (PITR); ≤ 24 h for Storage objects | Supabase PITR; storage versioning/mirroring |
-| RTO (service restoration) | ≤ 4 h | restore or failover + app redeploy |
-| Backup retention | 30 days PITR + weekly logical dumps ≥ 90 days (financial data ≥ 7 years via dumps + audit ledger) | |
+| PostgreSQL RPO | Set from the active Neon plan and project settings | Confirm backup/PITR window in Neon Console |
+| Application RTO | 4 hours target | Run a restore and Vercel redeployment drill |
+| Logical dump retention | At least 90 days; financial records follow applicable retention policy | Confirm encrypted, separate-account backup storage and retention lock |
+
+This repository does not claim that the above targets are currently met.
 
 ## 2. Backup Strategy
 
-- **Database**: Supabase PITR (WAL) + weekly `pg_dump` logical backups stored
-  in a separate cloud account/bucket (cross-account, immutable/WORM retention).
-  Monthly restore *drill* into a scratch project; measure and record RTO.
-- **Storage**: versioning enabled on buckets; nightly sync of `documents`/
-  `photos` metadata (rows) + periodic object inventory checksums; large binary
-  mirroring via scheduled job (Phase 13 hardening).
-- **Code/Infra**: Git (GitHub) is the source of truth; infra config in repo;
-  secrets in managed vaults with documented re-provisioning steps.
+- **Database:** use Neon-managed restore/PITR where enabled. Add scheduled,
+  encrypted `pg_dump` backups in a separate account for independent recovery.
+  Verify both database and role/schema restore procedures. Record the active
+  Neon retention settings in the operations runbook, not in source control.
+- **Object storage:** no production object-storage provider is currently
+  documented as configured. When added, require private objects, versioning,
+  and an independently verified backup process.
+- **Code and configuration:** GitHub is the code source of truth. Keep
+  production secrets in managed environment settings and document how to
+  recreate them without putting secret values in this repository.
 
-## 3. Failure Scenarios & Runbooks
+## 3. Failure Scenarios and Response
 
-| Scenario | Detection | Response |
-|---|---|---|
-| Bad migration in prod | deploy smoke fail / error spike | halt pipeline; forward-fix migration; restore PITR checkpoint if data damage |
-| Accidental tenant data deletion | support report / audit log anomaly | PITR to scratch project → surgical row export → restore into prod (audited, with org consent) |
-| Supabase regional outage | monitoring alerts | status page update; PITR restore into new project (runbook `DR-01`); repoint env vars; RTO target 4 h |
-| Storage loss | checksum job | restore objects from mirror/WORM backups |
-| Secret compromise | audit/gitleaks/notifications | rotate all provider keys (runbook `DR-02`), revoke sessions (`auth` admin), force re-login, review audit logs |
-| ransomware/logic bomb | anomaly detection | isolate (disable signups, revoke keys), restore from WORM dumps, forensic review of audit logs |
+| Scenario | Response |
+|---|---|
+| Bad production migration | Stop further deploys; inspect the migration ledger; issue a reviewed forward-fix. Restore only if data damage cannot be safely repaired. |
+| Accidental tenant data deletion | Restore a backup to an isolated Neon branch/database; verify the affected rows and RLS; export only approved records; restore with an audit trail. |
+| Neon service/database outage | Check Neon status and project health; follow provider recovery guidance; restore to a separate database only if required; update managed URLs and verify app-role RLS before reopening traffic. |
+| Object-storage loss | Follow the configured provider’s restore runbook; verify object checksums and tenant paths. |
+| Secret compromise | Rotate affected managed credentials, revoke sessions if required, redeploy, and review audit logs. Never paste values into tickets or commits. |
+| Malicious or destructive writes | Restrict app credentials, preserve logs/backups, restore to an isolated target, and validate ledger invariants before recovery. |
 
-## 4. Data Export (customer-facing)
+## 4. Recovery Procedure
 
-- Org owners can export their full tenant dataset (CSV/JSON per module +
-  documents manifest) — supports customer exit rights and acts as a
-  user-initiated backup.
-- Export is rate-limited, audited, and delivered via signed URL.
+1. Declare the incident and record the recovery point needed.
+2. Provision or select an isolated Neon database/branch and restore the chosen
+   provider backup or logical dump.
+3. Confirm schema state using `public.schema_migrations`; apply any reviewed
+   migrations with `npm run db:migrate` only after verifying the target URL.
+4. Recreate the non-owner `goshen_app` role and least-privilege grants. Set
+   `DATABASE_URL` and `DATABASE_URL_APP` in managed settings to the same target.
+5. Verify login/session, organization membership, RLS isolation, and critical
+   workflows before switching production traffic.
+6. Record results, update the runbook, and schedule a restore drill if any step
+   failed.
 
-## 5. Recovery Procedure Summary (DR-01)
+## 5. Backup Verification Gate
 
-1. Declare incident, note timestamp (defines PITR target).
-2. Create replacement Supabase project; run `supabase db push` (all migrations).
-3. Restore PITR/logical dump into it.
-4. Verify: row counts vs. last known metrics, pgTAP RLS suite, app smoke tests.
-5. Repoint secrets (URL/keys), redeploy web tier, enable Realtime/Storage.
-6. Post-incident review; update this plan.
-
-## 6. Backup Verification
-
-- Automated weekly job: restore latest dump into scratch, run consistency
-  checks (ledger recomputation vs caches, FK integrity, RLS suite), publish
-  report to admin notifications.
-- No backup is considered valid until it has been restored at least once.
+A backup is not considered verified until it has been restored to an isolated
+target and checked for row counts, foreign keys, tenant isolation, and financial
+ledger consistency. Schedule and record these drills after backup automation is
+implemented.

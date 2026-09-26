@@ -6,9 +6,9 @@ import dynamic from "next/dynamic";
 import { MapPinned, Layers, Eye, EyeOff, LocateFixed, Radio, RadioTower } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { pointInPolygon } from "@/lib/geo";
-import type { MapLocation, MapPolygon } from "./LeafletMap";
+import type { MapLocation, MapPolygon } from "./MapLibreMap";
 
-const LeafletMap = dynamic(() => import("./LeafletMap"), {
+const FarmMap = dynamic(() => import("./MapLibreMap"), {
   ssr: false,
   loading: () => (
     <div className="grid h-full w-full place-items-center bg-muted/50 text-sm text-muted-foreground">
@@ -191,7 +191,7 @@ export function MapWorkspace({
         <div className="card overflow-hidden p-0">
           <div className="h-[420px] w-full sm:h-[560px]">
             {displayedPolygons.length > 0 ? (
-              <LeafletMap
+              <FarmMap
                 polygons={displayedPolygons}
                 selectedId={selected}
                 onSelect={setSelected}

@@ -1,71 +1,80 @@
 # 19 — Deployment Architecture
 
-## 1. Environments
+This document separates the **current deployment** from desired release
+automation. Do not treat a target control as active until it is implemented and
+verified.
 
-| Env | Web | Database | Notes |
-|---|---|---|---|
-| Local | `next dev` | Supabase CLI (Docker) | migrations + seed applied locally |
-| Preview | Vercel preview per PR | Supabase **branching** (per-PR DB) | RLS test suite runs against it |
-| Staging | Vercel (staging project) | Supabase staging project | demo data incl. Bagamoyo Farm tenant |
-| Production | Vercel production | Supabase production project | PITR enabled; migrations gated |
+## 1. Current Runtime
 
-## 2. Pipeline (GitHub Actions)
+| Area | Current implementation |
+|---|---|
+| Web | Next.js App Router deployed to Vercel; GitHub `main` triggers production builds |
+| Database | Neon-hosted PostgreSQL with PostGIS |
+| Identity | Better Auth backed by the `auth` schema in PostgreSQL |
+| Tenant queries | `DATABASE_URL_APP`, a non-owner `goshen_app` role; `withUser()` sets transaction-local `app.user_id` so RLS applies |
+| Auth/migration connection | `DATABASE_URL`; server-only owner connection, never for normal tenant queries |
+| Migrations | Numbered SQL under `db/migrations/`, applied with `npm run db:migrate` |
+| CI | No complete GitHub Actions quality/deployment workflow is currently present |
+| Preview/staging isolation | Must be configured and verified; do not assume every Vercel preview has an isolated Neon branch |
 
-**ci.yml** — on every PR:
-1. `lint` (ESLint + `tsc --noEmit`)
-2. `test:unit` (Vitest + fast-check property tests)
-3. `db:test` — start Supabase CLI, apply all migrations, run pgTAP RLS suites
-   (`tests/rls/`) and integration tests; **fail = block merge**
-4. `test:e2e` (Playwright) — on PRs touching `app/` or `services/`
-5. Secret scan (`gitleaks`) + dependency audit
+Required production invariant: `DATABASE_URL` and `DATABASE_URL_APP` point to
+the same Neon database and branch. The app role must remain a non-owner so RLS
+cannot be bypassed. Secret values are kept in managed environment settings and
+must never be committed or logged.
 
-**deploy.yml** — on merge to `main`:
-1. All CI gates green
-2. `supabase db push` to staging → smoke tests → (manual approval env gate) →
-   production push with migration lock
-3. Vercel deploy (automatic via Git integration)
-4. Post-deploy smoke: health endpoint, auth flow, RLS spot-check, provider
-   status dashboard
+## 2. Target Release Pipeline
+
+Implement CI as a separate, reviewable change. The intended checks are:
+
+1. Typecheck, lint, unit tests, and dependency/security scans.
+2. Apply migrations to an isolated disposable PostgreSQL/Neon branch.
+3. Run migration, RLS, service integration, and affected Playwright journey
+   tests against that branch.
+4. Deploy a preview and run smoke checks.
+5. Promote to production only after the checks pass; apply database migrations
+   before code that depends on them, with a verified rollback/forward-fix plan.
+
+The repository does not yet meet this target pipeline. In particular, the
+documented pgTAP and Playwright suites must exist before their gates are enabled.
 
 ## 3. Migrations
 
-- Numbered SQL files in `supabase/migrations/` (generated from reviewed docs
-  like `03-database-schema.md`).
-- Never edit production schema by hand; every change is a migration reviewed
-  in a PR with its pgTAP impact analysis.
-- Destructive migrations require a two-PR protocol (deprecate → drop) and a
-  pre-migration backup checkpoint.
+- Source: `db/migrations/*.sql`, ordered by filename.
+- Runner: `scripts/migrate.ts`, invoked with `npm run db:migrate`.
+- The runner records completed filenames in `public.schema_migrations` and
+  provisions the least-privilege app role. Review its side effects and verify
+  the selected database URL before using it against production.
+- Production schema changes are migrations, not manual console edits.
+- Destructive changes require a staged deprecation, verified backup, and
+  forward-fix plan.
 
-## 4. Secrets & Configuration
+## 4. Configuration and Secrets
 
-- Vercel env vars (server-only): `SUPABASE_URL`, `SUPABASE_ANON_KEY` (public),
-  `SUPABASE_SERVICE_ROLE_KEY`, `AI_PROVIDER_API_KEY`, `WEATHER_API_KEY`,
-  `MAP_TILES_TOKEN`, `UPSTASH_REDIS_URL/TOKEN`.
-- Supabase project secrets for Edge Functions.
-- Client-exposed values limited to `NEXT_PUBLIC_*` (URL + anon key only).
-- Rotation runbook in `20-disaster-recovery.md`.
+Server-only variables include `DATABASE_URL`, `DATABASE_URL_APP`,
+`BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, mail-provider credentials, and any
+configured external provider keys. `NEXT_PUBLIC_*` variables may be exposed to
+the browser only when their values are designed to be public. Database URLs,
+auth secrets, provider credentials, and owner-role credentials are never public.
 
-## 5. Runtime Topology
+Vercel and Neon hold production values. `.env.local` and `.env.production` are
+local-only and must not be committed. See `.env.example` for variable names and
+safe placeholders.
 
-- **Vercel**: Next.js app (Edge/Node runtimes per route), ISR for read-heavy
-  reference pages, image optimization, WAF rules.
-- **Supabase**: Postgres + PostGIS (compute sized per tenant growth), Auth,
-  Storage (private buckets), Realtime, Edge Functions; scheduled functions for
-  weather pulls, notification rules, usage metering, cache-drift checks.
-- **Optional Python analytics** (Phase 7+): container service (Fly.io/Railway
-  or Supabase Edge runtime equivalent), private network, called by Next server
-  tier only.
+## 5. Runtime Topology and Integrations
 
-## 6. Scaling Notes
+- Vercel serves the Next.js application and its Node.js route handlers/actions.
+- Neon provides managed PostgreSQL. PostGIS is used for farm and plot geometry.
+- Better Auth uses the server-side owner connection for identity operations.
+- Tenant services use the app-role connection with transaction-scoped user
+  context and RLS.
+- Object storage, realtime delivery, provider schedulers, and the optional
+  Python analytics service are future integrations unless separately configured
+  and verified. No Supabase runtime is part of the current deployment.
 
-- Connection pooling (Supavisor) for serverless fan-out.
-- Read scaling: replicas for reporting if needed (Phase 13 decision point).
-- Storage lifecycle rules for generated reports (auto-expire after N days).
+## 6. Release and Recovery
 
-## 7. Release & Rollback
-
-- Atomic DB migrations (avoid long locks; `create index concurrently` where
-  applicable).
-- Vercel instant rollback for the web tier; DB rollbacks via forward-fix
-  migrations (never `down` migrations in prod).
-- Feature flags decouple deploy from release.
+Vercel can redeploy a prior web build; database changes require a forward-fix
+migration unless a tested recovery procedure is used. Keep schema changes
+backward-compatible with the deployed app during rollout. Neon backup/PITR
+retention and restore objectives must be verified against the active Neon plan
+and configured project; this repository does not certify those settings.

@@ -84,6 +84,7 @@ Flush: POST /api/v1/sync/batch
 ## 7. Testing (see 18)
 
 - Unit: queue ordering, idempotency, depends_on resolution.
-- Integration: offline batch against local Supabase incl. conflict fixtures.
+- Integration: offline batch against a disposable PostgreSQL database initialized
+  with the repository migrations, including conflict fixtures.
 - E2E: Playwright offline context — record activity in airplane mode,
   reconnect, assert server state identical (gate item, brief §71).

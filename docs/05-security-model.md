@@ -10,9 +10,9 @@ only barrier.
 
 ## 2. Identity & Membership Model
 
-- Supabase `auth.users` is the identity provider (email + password at launch;
-  phone OTP and Google OAuth reserved in schema).
-- `public.profiles` (1:1 with `auth.users`) holds display data and locale.
+- Better Auth is the identity provider (email/password at launch; phone OTP
+  deferred). Its identity records live in `auth."user"`.
+- `public.profiles` (1:1 with `auth."user"`) holds display data and locale.
 - `public.organization_members (organization_id, user_id, role, status)` —
   org-level membership and role. `status ∈ {active, invited, suspended}`.
 - `public.farm_members (farm_id, user_id, role)` — optional farm-scoped role;
@@ -20,10 +20,13 @@ only barrier.
 - Invitations (`public.invitations`) carry a single-use token, expiry, and
   intended role; accepting creates the membership row.
 
-## 3. Authorization Helper Functions (Supabase/Postgres)
+## 3. Authorization Helper Functions (Neon PostgreSQL)
 
-All helpers are `SECURITY DEFINER`, `STABLE`, `search_path = public`, owned by
-`postgres`, and expose **only membership booleans/roles — never raw data**:
+The application verifies the Better Auth session, then `withUser()` sets the
+transaction-local `app.user_id`; `public.app_uid()` reads that value. The
+membership helpers below are `SECURITY DEFINER`, `STABLE`, use
+`search_path = public`, and expose **only membership booleans/roles — never raw
+data**:
 
 ```sql
 public.user_org_ids()            RETURNS SETOF uuid        -- orgs where status='active'
@@ -79,8 +82,9 @@ CREATE POLICY t_update ON t FOR UPDATE
 
 Additional enforcement:
 
-- **Tenant stamping**: `BEFORE INSERT` trigger `set_organization_context()` sets
-  `created_by = auth.uid()`; `BEFORE UPDATE` maintains `updated_at`.
+- **Tenant stamping**: triggers set `created_by` from `public.app_uid()`;
+  `BEFORE UPDATE` maintains `updated_at`. The current callback identity is
+  transaction-scoped, not a Supabase JWT claim.
 - **Cross-org references**: FK columns (e.g., `plots.farm_id`,
   `inventory_movements.item_id`) are validated by triggers to resolve to rows in
   the *same* organization — preventing ID-guessing joins across tenants.
@@ -90,9 +94,8 @@ Additional enforcement:
 ## 5. Financial Immutability
 
 - `journal_entries`, `journal_lines`, `payments` (posted), `audit_logs`,
-  `inventory_movements`: `REVOKE UPDATE, DELETE` from `authenticated` and
-  `anon`; enforced additionally by `BEFORE UPDATE/DELETE` triggers that raise
-  exceptions.
+  `inventory_movements`: revoke `UPDATE`/`DELETE` from the `goshen_app` role;
+  enforce this additionally with `BEFORE UPDATE/DELETE` triggers.
 - Corrections: `journal_entries.reversal_of_id` self-FK; a reversal entry
   references the original and must balance to its negation.
 - Draft financial documents (unposted journals) may be edited by
@@ -102,35 +105,33 @@ Additional enforcement:
 
 - Separate table `public.platform_admins (user_id, level)` — **not** derivable
   from org membership; membership grants no platform access.
-- Super admins do not query tenant tables via RLS. All platform admin
-  functionality runs through server-only Route Handlers using the service-role
-  client, each wrapped in `requirePlatformAdmin()` + an audit write
-  (`audit_logs.actor_scope = 'platform'`).
+- Super admins use server-only routes with explicit authorization and an audit
+  write (`audit_logs.actor_scope = 'platform'`). Owner credentials are not
+  used for ordinary tenant queries.
 - Tenant financial records are **read-only** for platform admins by policy;
   no UI exposes modification.
 
-## 7. Storage Security
+## 7. Storage Security (planned integration)
 
 - Private buckets only: `documents` (per-org path prefix `org/{org_id}/…`),
   `photos` (field evidence), `reports` (generated exports).
-- Bucket RLS mirrors table policies: path prefix must start with an org the
-  caller belongs to (`storage.objects` policies using `is_org_member` parsed
-  from the path).
+- When object storage is selected, access controls must mirror table RLS: an
+  object path is scoped to an organization and signed URLs are short-lived.
 - Signed URLs (short TTL) for downloads; nothing public.
 
 ## 8. Application-Tier Security
 
-- Secrets (`SUPABASE_SERVICE_ROLE_KEY`, `AI_PROVIDER_API_KEY`,
-  `WEATHER_API_KEY`, map/terrain tokens) exist **only** as Vercel/Supabase
-  server env vars. Never imported into client bundles; enforced by lint rule
-  banning `serviceRole` imports outside `server/`.
+- Secrets (`DATABASE_URL`, `DATABASE_URL_APP`, `BETTER_AUTH_SECRET`,
+  `AI_PROVIDER_API_KEY`, `WEATHER_API_KEY`, map/terrain tokens) exist only in
+  server-side environment configuration. Never imported into client bundles.
 - Zod validation at every boundary (forms, API routes, RPC params).
 - Rate limiting: Upstash Redis (or Vercel WAF) on auth endpoints, AI routes,
   and export generation.
-- Session management: Supabase Auth defaults (JWT ~1 h, refresh rotation);
-  `requireAuth()` middleware on protected routes; security headers (CSP,
-  HSTS, X-Frame-Options) configured in `next.config.ts`.
-- Edge Functions validate the caller's JWT and org membership server-side.
+- Session management is handled by Better Auth. Protected routes must verify
+  the session before entering `withUser()` and querying tenant data. Security
+  headers are configured in `next.config.ts`.
+- Next.js Route Handlers validate the Better Auth session and organization
+  membership server-side.
 
 ## 9. Audit Logging (append-only)
 

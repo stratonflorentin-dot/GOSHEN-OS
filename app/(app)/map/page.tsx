@@ -3,7 +3,7 @@ import { getSessionUser } from "@/lib/auth/server";
 import { listMemberships } from "@/services/orgService";
 import { listFarmGeo } from "@/services/farmService";
 import { listPlotGeo } from "@/services/plotService";
-import type { MapPolygon } from "@/features/map/LeafletMap";
+import type { MapPolygon } from "@/features/map/MapLibreMap";
 import { MapWorkspace } from "@/features/map/MapWorkspace";
 
 export default async function MapPage() {

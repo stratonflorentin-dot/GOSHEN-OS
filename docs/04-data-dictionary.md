@@ -11,7 +11,7 @@ details not repeated here are self-evident from the DDL and inline comments.
 | Primary keys | `uuid` (time-ordered UUIDv7-style where generated in app) |
 | Tenant columns | `organization_id uuid NOT NULL` on every tenant table; `farm_id` added on farm-scoped tables |
 | Timestamps | `created_at timestamptz NOT NULL DEFAULT now()`; `updated_at` maintained by `touch_updated_at()` trigger |
-| Attribution | `created_by uuid REFERENCES profiles(id)` — the acting user, set by trigger from `auth.uid()` |
+| Attribution | `created_by uuid REFERENCES profiles(id)` — the acting user, set from transaction-local `app.user_id` via `public.app_uid()` |
 | Soft delete | `deleted_at timestamptz NULL` **only** on: `plots, map_features, crop_activities, documents, inventory_items, workers, customers, suppliers, equipment, farms(status=archived)`. Ledger tables never soft-delete |
 | Money | `numeric(18,4)`; `currency char(3)` ISO-4217; `fx_rate numeric(14,6)` stores the rate used at transaction time; `amount_base = amount × fx_rate` where cross-currency |
 | Areas | Stored in `m²` (`area_m2`); UI converts to hectares/acres per org settings. Computed as `ST_Area(geom::geography)` (ellipsoidal, not planar) |

@@ -2,6 +2,12 @@
 
 ## 1. Provider Adapter Pattern
 
+**Implementation status:** the current app registers a generated mock provider
+when no provider is configured. This does not meet the production requirement
+below. Until a real provider is selected and clearly identified in the UI,
+weather must be presented as demo data or unavailable, never as observed farm
+conditions.
+
 ```ts
 interface WeatherProvider {
   readonly name: string; readonly status: 'active' | 'pending';
@@ -16,10 +22,10 @@ interface WeatherProvider {
   Phase 7 kickoff; switching later is a config change, not a refactor.
 - **No provider connected ⇒ status `pending`**: UI shows "Weather data not
   connected yet" with setup guidance. **No placeholder forecasts, ever.**
-- Provider pulls run as scheduled Supabase Edge Functions (every 3 h forecast
-  refresh; daily observations), per active farm with a centroid, writing
-  normalized rows (`weather_forecasts`, `weather_observations`) — the app
-  never calls the vendor synchronously from the browser.
+- Provider pulls run server-side through scheduled jobs or protected Next.js
+  route handlers (never from the browser). A scheduler and durable ingestion
+  job remain future deployment capabilities; do not imply they are active
+  until configured.
 
 ## 2. Data Storage & Association
 

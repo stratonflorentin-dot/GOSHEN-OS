@@ -8,13 +8,13 @@ UI (app/ + features/)
    ▼
 Service layer (services/*Service.ts)   ← business logic, validation, orchestration
    │  uses only
-   ├── Data access (lib/supabase/*)    ← typed clients; complex queries in Postgres views/RPC
+   ├── Data access (lib/db/*)          ← server-only Postgres.js clients; complex queries in Postgres views/RPC
    ├── Adapters (services/adapters/*)  ← weather, satellite, market, AI, storage
    └── Shared domain (lib/domain/*)    ← pure calculation functions (profit, FCR, areas)
 ```
 
 Rules:
-- React components never import Supabase clients directly; never contain SQL,
+- React components never import database clients directly; never contain SQL,
   business rules, or role logic.
 - Services are isomorphic (run on server; the browser calls them through Route
   Handlers or Server Actions).
@@ -24,10 +24,10 @@ Rules:
 
 | Pattern | Used for | Auth |
 |---|---|---|
-| **Server Components** (default) | Reads: dashboards, lists, detail pages | Server Supabase client (cookie session) |
-| **Server Actions** | Writes from forms: create plot, record activity, log expense | Same + `requireRole` inside service |
-| **Route Handlers** (`app/api/…`) | AI endpoints, file uploads (signed URLs), exports (PDF/CSV/XLSX), webhooks, platform admin, device sync | JWT + `requireAuth`/`requireRole`/`requirePlatformAdmin` |
-| **Supabase client direct** | Realtime subscriptions (notifications), Storage signed URL fetch | anon key + RLS |
+| **Server Components** (default) | Reads: dashboards, lists, detail pages | Better Auth session + `withUser()` and RLS-enforced app-role connection |
+| **Server Actions** | Writes from forms: create plot, record activity, log expense | Better Auth session + service authorization and RLS |
+| **Route Handlers** (`app/api/…`) | AI endpoints, file uploads, exports, webhooks, platform admin, device sync | Better Auth session + server-side organization/role checks |
+| **Direct browser database access** | Not used; realtime and object storage are future adapter integrations | No database credential is exposed to the browser |
 | **Postgres RPCs** | Aggregate reads (profitability, batch economics), geometry ops (MVT tiles) | RLS-enforced functions |
 
 ## 3. Route Handler Conventions
@@ -45,8 +45,9 @@ Rules:
   ```
   Codes are stable string constants in `lib/errors.ts`; never leak stack traces
   or SQL.
-- **Rate limiting**: per-user token buckets on `/api/v1/ai/*`,
-  `/api/v1/sync/*`, `/api/v1/reports/export` (Upstash Redis; limits in env).
+- **Rate limiting**: add per-user limits to sensitive auth, AI, sync, and
+  export routes before exposing those integrations broadly. A shared rate-limit
+  store is a deployment requirement, not currently assumed to exist.
 - **Idempotency**: mutating sync endpoints require the client-generated
   `Idempotency-Key` (the outbox operation id) — replays return the original
   result (see `12-offline-sync-architecture.md`).
@@ -126,20 +127,20 @@ Contract rules:
 - Adapters are the only place vendor SDKs/API keys are imported; keys come from
   server env only.
 
-## 7. Uploads & Downloads Flow
+## 7. Uploads & Downloads Flow (target; storage provider not configured)
 
 1. Client requests `POST /api/v1/documents/upload-url` (Zod-validated metadata).
 2. Server checks role + quota, creates `documents` row (or pending row), returns
    signed upload URL scoped to `org/{orgId}/…`.
-3. Client uploads directly to Supabase Storage.
+3. Client uploads directly to the configured private object-storage provider.
 4. On completion the pending row is finalized; virus/size checks per bucket
    policy. Downloads always via short-TTL signed URLs.
 
 ## 8. Versioning & Evolution
 
 - `/api/v1/` prefix; breaking changes → `/api/v2/`, v1 sunset window.
-- Postgres schema evolves via numbered Supabase migrations only (never console
-  edits in production).
+- Postgres schema evolves via numbered files in `db/migrations/`, applied by
+  `npm run db:migrate` (never console edits in production).
 - Feature flags via `provider_sync_state`/env for gradual rollouts.
 
 ## Open Questions

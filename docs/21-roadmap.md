@@ -7,8 +7,8 @@ Vertical slices ship to staging continuously inside each phase.
 ## Phase 1 — Foundation
 Architecture (this package) → review → then:
 Scaffolding (Next.js + TS strict + Tailwind + shadcn/ui + i18n en/sw) ·
-Supabase project, migrations for tenancy schema (docs/03 §1–2 identity+farms) ·
-Auth (email-only first; phone OTP deferred), profiles, organizations, members, invitations ·
+Neon PostgreSQL project, numbered `db/migrations/` for tenancy schema (docs/03 §1–2 identity+farms) ·
+Better Auth (email/password first; phone OTP deferred), profiles, organizations, members, invitations ·
 Org + farm creation wizard (form-based, no map yet) · RLS + pgTAP suites ·
 Billing/plan scaffolding (schema + trial) · CI/CD baseline.
 **Gate:** a second org cannot see org 1's data (automated proof).

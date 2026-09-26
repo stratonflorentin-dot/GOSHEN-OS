@@ -1,5 +1,19 @@
 # 11 — GIS, GPS Boundary Capture & 3D Architecture
 
+## Current Implementation Status
+
+The deployed map uses MapLibre GL JS for operational geometries. Its **3D
+satellite** view uses Esri World Imagery with an oblique pitched camera, based
+on the interaction pattern in the owner's Calvary Connect map. This provides
+an accessible satellite view without requiring the failed CARTO API-key style
+shown in the field-capture screenshot. It is not a terrain-enabled Cesium
+globe; Cesium terrain/imagery remains the planned Phase 8 implementation.
+
+Boundary recording uses browser geolocation and displays accuracy. Automated
+tests currently cover the pure point-in-polygon helper; full phone GPS,
+geometry validation, area parity, and boundary-version acceptance tests remain
+to be completed before this module meets its definition of done.
+
 PostGIS is the **spatial source of truth**. The browser is a view/editor; every
 geometry write goes through `gisService` validation. 2D first (MapLibre,
 satellite basemap primary); 3D is a high-quality visualization layer (CesiumJS,

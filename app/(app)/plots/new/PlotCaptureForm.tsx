@@ -19,7 +19,7 @@ import { accuracyLabel, haversineM, pathLengthM, polygonAreaM2 } from "@/lib/geo
 import { formatAreaTriple, formatHa } from "@/lib/format";
 import { createPlotAction } from "./actions";
 
-const LeafletMap = dynamic(() => import("@/features/map/LeafletMap"), {
+const FarmMap = dynamic(() => import("@/features/map/MapLibreMap"), {
   ssr: false,
   loading: () => (
     <div className="grid h-full w-full place-items-center bg-muted/50 text-sm text-muted-foreground">
@@ -211,8 +211,8 @@ export default function NewPlotPage({ farms }: { farms: FarmOption[] }) {
           </div>
 
           <div className="mt-3 h-72 overflow-hidden rounded-2xl border border-black/5 sm:h-96">
-            <LeafletMap
-              polygons={points.length >= 3 ? [{ id: "walk", name: "Plot", ring: points }] : []}
+            <FarmMap
+              polygons={points.length >= 2 ? [{ id: "walk", name: "Plot", ring: points }] : []}
               center={coords ?? undefined}
               zoom={18}
               showZoomControls={false}

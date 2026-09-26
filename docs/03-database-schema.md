@@ -1,6 +1,8 @@
 # 03 — Complete Database Schema (PostgreSQL / PostGIS DDL)
 
-This DDL is the future Supabase migration set (`supabase/migrations/0001_…`).
+This document is the complete target schema reference. The deployed schema is
+evolved through numbered files in `db/migrations/` using
+`npm run db:migrate`; review those files before changing production.
 Conventions (see `04-data-dictionary.md`): UUID PKs; `timestamptz` timestamps
 defaulting `now()`; `created_by uuid` where meaningful; `numeric(18,4)` money +
 ISO currency; `geometry(...,4326)` spatial columns with GiST indexes; soft
@@ -30,7 +32,7 @@ begin new.updated_at = now(); return new; end $$;
 -- 1. IDENTITY & TENANCY
 -- =====================================================================
 create table public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
+  id uuid primary key references auth."user"(id) on delete cascade,
   full_name text not null default '',
   phone text,
   locale text not null default 'en' check (locale in ('en','sw')),

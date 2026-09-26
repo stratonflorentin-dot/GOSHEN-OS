@@ -16,7 +16,7 @@ import { getSessionUser } from "@/lib/auth/server";
 import { listMemberships } from "@/services/orgService";
 import { listFarmGeo, type FarmGeo } from "@/services/farmService";
 import { formatHa } from "@/lib/format";
-import type { MapPolygon } from "@/features/map/LeafletMap";
+import type { MapPolygon } from "@/features/map/MapLibreMap";
 import { MiniMap } from "@/features/map/MiniMap";
 
 function greet(): string {

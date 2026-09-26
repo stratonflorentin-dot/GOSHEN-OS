@@ -38,21 +38,21 @@ and offline field operations — one platform, thousands of farms.
 - **Frontend:** Next.js (App Router) + React + TypeScript (strict)
 - **UI:** Tailwind CSS + shadcn/ui + Radix UI primitives
 - **Forms:** React Hook Form + Zod (Zod schemas shared client/server)
-- **Maps:** MapLibre GL JS + Turf.js — **satellite basemap primary**, streets toggle; 2D is the source-of-truth UX, PostGIS is the spatial source of truth
+- **Maps:** MapLibre GL JS; 2D geometry is the source-of-truth UX, with an oblique satellite camera mode for field inspection. PostGIS is the spatial data source of truth.
 - **3D:** **High-quality CesiumJS scene** (Cesium ion terrain + satellite imagery) in Phase 8 behind a `Scene3DProvider` adapter; MapLibre fill-extrusion fallback when tokens are absent
-- **Database:** PostgreSQL 15+ with PostGIS 3.4 and pgvector
-- **Backend:** Supabase (Auth, Postgres + RLS, Storage, Realtime, Edge Functions)
+- **Database:** Neon-hosted PostgreSQL with PostGIS; pgvector where enabled
+- **Backend:** Better Auth for identity; server-side PostgreSQL through `postgres.js`; tenant access enforced by PostgreSQL RLS
 - **Charts:** Apache ECharts
 - **Offline:** PWA + Workbox service worker + IndexedDB (Dexie) outbox queue
 - **State:** Server state via TanStack Query keyed per module; minimal global client state (auth/session, online status, sync queue). No global store for server data.
 - **Analytics (Python, Phase 7+):** FastAPI service for statistics/geospatial processing, called **synchronously (REST)** by the Next.js service layer
-- **CI/CD:** GitHub Actions → Vercel (web) + Supabase migrations
+- **CI/CD:** GitHub → Vercel (web); numbered migrations live in `db/migrations/` and run with `npm run db:migrate`
 - **Testing:** Vitest + Testing Library, Playwright, pgTAP (RLS), property-based tests for calculations
 
 ## Locked Decisions (2026-09-25)
 
-1. **Tenancy:** single shared PostgreSQL database with Row Level Security.
-2. **Auth:** email-only at launch; phone OTP deferred (schema reserved).
+1. **Tenancy:** single shared Neon PostgreSQL database with Row Level Security; tenant queries use a non-owner role.
+2. **Auth:** Better Auth with email/password at launch; phone OTP deferred.
 3. **Maps & 3D:** MapLibre with satellite basemap primary; high-quality CesiumJS
    (terrain + satellite imagery) for 3D. The owner's reference repo
    `stratonflorentin-dot/Calvary-connect` (user-owned) may be consulted and its
@@ -63,6 +63,20 @@ and offline field operations — one platform, thousands of farms.
 
 ## Review Instructions
 
-All five open architecture questions were resolved on 2026-09-25 (see each
-document's "Open Questions → RESOLVED" section). The package is approved for
-implementation: Phase 1 per [21-roadmap.md](./21-roadmap.md) may begin.
+The architecture baseline is Neon + Better Auth, as implemented by the app and
+recorded in `docs/nemo-prompt.md`. Roadmap sections describe the target product;
+they do not assert that every listed module or provider is already implemented.
+Current implementation gaps and verification status are tracked in
+`../AUDIT_REPORT.md`.
+
+## Current Implementation Notes
+
+- Farm and plot maps use MapLibre GL JS. The **3D satellite** control switches
+  to Esri World Imagery and a pitched camera; it is an oblique 3D view, not a
+  Cesium terrain globe. High-quality 3D terrain remains a later roadmap phase.
+- Neon/Better Auth is the deployed backend. Supabase Auth, client libraries,
+  Storage, Realtime, and Edge Functions are not part of the current runtime.
+- The folder structure and roadmap documents describe the intended modular
+  product. They are not a claim that all listed feature modules, providers,
+  tests, or deployment gates exist today; check `../AUDIT_REPORT.md` for their
+  implementation status.

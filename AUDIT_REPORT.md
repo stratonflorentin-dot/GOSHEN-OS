@@ -1,12 +1,53 @@
 # GOSHEN OS Repository and Live Audit
 
+## Follow-up: documented architecture alignment (2026-09-26)
+
+The `docs/` package is being treated as the intended product and architecture
+specification. The deployed application is **not yet fully aligned** with it.
+The latest production fix is commit `83411dc`: onboarding now loads, the
+organization RPC was verified in a rolled-back production transaction, and
+the migration uses `CREATE OR REPLACE` so the existing function does not cause
+SQLSTATE 42723 on reapplication. The production site responds successfully on
+`/`, `/onboarding`, `/manifest.webmanifest`, and `/favicon.ico`.
+
+Current targeted checks: TypeScript passes; 8 unit tests pass; the Webpack
+production build passes. These checks do not certify all modules or the full
+acceptance journeys in `docs/18-testing-strategy.md` and
+`docs/22-definition-of-done.md`.
+
+Architecture gaps found against the docs include:
+
+- **Backend specification conflict:** `docs/README.md`, `docs/03-database-schema.md`,
+  and deployment/recovery documents specify Supabase, while
+  `docs/nemo-prompt.md` specifies Neon + Better Auth and the deployed app uses
+  Neon-compatible PostgreSQL + Better Auth. Resolve this contradiction before
+  changing production infrastructure.
+- **GIS stack:** the documented 2D standard is MapLibre; the active farm map is
+  now MapLibre. A 3D satellite toggle uses a pitched camera and Esri imagery;
+  it is not a terrain-enabled Cesium globe. The browser-only boundary and
+  geofence flows still need phone/GPS acceptance testing.
+- **Provider integrity:** the docs require integrations to say `PENDING` when
+  unavailable, but `services/weatherService.ts` registers generated mock
+  forecasts by default. The UI must label this clearly or use an unavailable
+  state.
+- **Layering and module coverage:** the docs require thin App Router pages and
+  business logic in module services. The present app has partial vertical
+  slices and does not implement all the documented modules or acceptance
+  journeys.
+- **Quality gates:** no complete Playwright journey suite, pgTAP suite, CI
+  workflow, or verified 360 px device matrix is present; passing the current
+  focused unit/build checks is not equivalent to the documented DoD.
+
+The full `docs/` package should remain the product target, with architecture
+conflicts resolved before incompatible backend or map rewrites.
+
 **Audit date:** 2026-09-26
 **Repository:** `stratonflorentin-dot/GOSHEN-OS`
 **Live URL:** https://goshen-os-five.vercel.app/
 
 ## Scope and evidence
 
-This is a repository review, live page inspection, and targeted database verification. Live signup, signin, session persistence, and logout pass against the public Vercel URL. Earlier Vercel `/dashboard` errors were traced to `DATABASE_URL_APP` pointing at a different database than Better Auth's `DATABASE_URL`. On 2026-09-26, the Production app-role URL was aligned to the existing Vercel owner database; the role was verified as non-owner with RLS enabled, and its connection was verified. A fresh Git-triggered deployment and authenticated dashboard/onboarding smoke check are pending. Tenant-isolation verification passes its two-tenant checks on the configured development database, including anonymous isolation, tenant reads/writes, privilege escalation, and append-only policies. GeoJSON parsing was checked against configured PostGIS and corrected to supported function signatures. Seven Vitest unit tests pass. No automated desktop/tablet/mobile browser matrix exists, so responsive behavior and phone workflows are not certified.
+This is a repository review, live page inspection, and targeted database verification. Live signup, signin, session persistence, and logout pass against the public Vercel URL. The production app-role URL was aligned to the owner database and verified as non-owner with RLS enabled. Organization onboarding now renders; production home, onboarding, manifest, and favicon return HTTP 200. The organization RPC was tested against production in a transaction that was rolled back. Tenant-isolation checks pass for the tested two-tenant cases on the configured development database; full table/role coverage remains. GeoJSON parsing was checked against PostGIS. Eight unit tests pass. No complete desktop/tablet/mobile browser matrix exists, so responsive behavior and phone workflows are not certified.
 
 ## What exists
 
@@ -27,11 +68,11 @@ This is a repository review, live page inspection, and targeted database verific
 | Better Auth with PostgreSQL | Refactor | Kysely Postgres.js dialect and explicit schema/field mappings are deployed. The current Better Auth user table is `auth.user`. |
 | Authentication schema | Refactor | Migration 0008 and explicit Better Auth field mappings align the current `auth` schema; migration 0009 aligns the profile foreign key. Both migrations were applied in schema-only mode to the configured production database. |
 | Organization and farm schema/RLS | Keep, then verify | PostgreSQL migrations define tenant policies. The focused two-tenant RLS verification now passes against configured development; the complete policy matrix and assigned-farm role matrix still need coverage. |
-| MapLibre and Leaflet | Refactor later | Both stacks are dependencies; MapLibre is used for the 3D scene while Leaflet/React Leaflet remains. Choose one primary stack after comparing feature coverage and map pages. |
-| 3D/Cesium | Keep fallback; document status | The MapLibre extrusion path exists. Cesium token-dependent support is disabled/falls back; do not present it as an active Cesium integration. |
+| MapLibre | Current 2D/oblique satellite map | All farm-map routes use MapLibre; `3D satellite` is an oblique camera mode over Esri imagery. Verify tile availability, mobile controls, and geometry behavior on devices. |
+| 3D/Cesium | Planned high-quality terrain globe | Cesium terrain is not currently active; do not present the oblique MapLibre camera as a terrain model. |
 | Weather | Keep provider interface; fix presentation | Mock provider returns generated values and is selected by default. Make mock status unmistakable in UI and production configuration; do not present mock forecasts as observations. |
 | Offline and PWA | Refactor | IndexedDB/service worker/sync code exists, but sync requests target GPS and other API endpoints that were not found in the current app routes. Test queue replay, tenant/session scoping, cache invalidation, and service-worker update behavior. |
-| Test infrastructure | Refactor | Vitest and seven focused auth-validation/GIS calculation tests now pass; meaningful database/RLS/workflow coverage is still needed. |
+| Test infrastructure | Continue | Vitest and eight focused unit tests pass; meaningful database/RLS/workflow coverage is still needed. |
 
 ## Functional, partial, mocked, missing, and broken
 
@@ -45,18 +86,18 @@ This is a repository review, live page inspection, and targeted database verific
 
 ### Broken or high-confidence defects
 
-- **Live dashboard profile creation fails:** signup/session endpoints work, but `/dashboard` fails when inserting the profile. Runtime logs show an auth user missing from the database behind the profile foreign key. Vercel's production `DATABASE_URL_APP` target is a Secret and could not be inspected. Align production URLs to one database and branch, apply migrations there, and retest.
+- **Resolved in production:** the earlier profile/RPC server failures came from mismatched database configuration and organization creation not supplying a required slug. Production app-role configuration is aligned; migration 0010 now generates a unique slug and uses `CREATE OR REPLACE`. Organization creation was verified in a production transaction and rolled back afterward.
 - The initial signup origin and Better Auth schema/model mismatches were corrected. The canonical production hostname is trusted, auth models explicitly target `auth.*`, and IDs use UUID generation. Live signup/signin/session/logout requests now pass.
 - A local production build connected to the configured production database passed signup, session read, dashboard/profile creation, signout, signin, and session read; the disposable account was deleted. That is separate from and does not verify Vercel's runtime database connection.
 - **Signup success UX was wrong:** email verification is disabled, but signup sent the user to a page instructing them to check email. It now routes to `/dashboard` and catches network exceptions in the working tree.
 - **Signup surfaced backend messages:** detailed auth/database errors could be shown in the browser. The updated signup maps known input errors and returns a safe generic message for other failures.
-- The initial `npm run test:unit` failed because Vitest was missing; Vitest and seven focused tests have now been added and pass. They do not replace database/RLS or end-to-end coverage.
+- Vitest is installed and eight focused unit tests pass. They do not replace database/RLS or end-to-end coverage.
 - The service-worker sync client calls `/api/gps/traces` and other synchronization endpoints that are absent from the inspected App Router routes. These queue types cannot be assumed to sync.
 - Farm and plot boundary writes called a two-argument `ST_GeomFromGeoJSON` signature not supported by the configured PostGIS installation. Those writes now parse with the supported function and set SRID 4326 explicitly.
 
 ### Partial / not verified end-to-end
 
-- Live dashboard/profile bootstrap and organization onboarding; signup/signin/session/logout API lifecycle passes, but full account-to-farm onboarding remains unverified.
+- Full account-to-farm onboarding remains unverified end-to-end. The organization setup page loads, and the organization RPC passed a rolled-back production transaction; a user-created farm and boundary lifecycle still needs a real acceptance run.
 - RLS coverage for all tables and the required Organization A/B and assigned-farm isolation scenarios.
 - Farm boundary capture validation, polygon editing/import, and persistence through PostGIS.
 - Inventory movement/cost allocation, finance totals, harvest/sale accounting, and the product-wide crop/livestock chains.
@@ -104,14 +145,14 @@ Variables referenced by source: `DATABASE_URL`, `DATABASE_URL_APP`, `BETTER_AUTH
 - `npm run typecheck`: passed after signup/auth changes.
 - `npx next build --webpack`: passed; route compilation and static generation completed.
 - `npm run build` (default Turbopack): blocked on this Windows workspace because the installed Next SWC native binding is not a valid Win32 application; the Webpack build succeeded as a verification alternative.
-- `npm run test:unit`: passed (2 files, 7 tests).
+- `npm run test:unit`: passed (2 files, 8 tests).
 - `npm run lint`: no lint script is configured. ESLint config and rule coverage need a separate review.
-- Live production `/` and `/register` opened read-only before and after push; new registration markup is visible. Signup/signin/session/logout APIs were exercised; dashboard returned 500 during profile creation. Mobile/tablet viewport behavior was not exhaustively tested.
+- Live production `/`, `/onboarding`, `/manifest.webmanifest`, and `/favicon.ico` return HTTP 200. An authenticated onboarding page smoke check rendered successfully. Mobile/tablet viewport behavior was not exhaustively tested.
 
 ## Recommended order
 
-1. Verify the fresh Vercel deployment now that `DATABASE_URL_APP` is aligned; exercise profile creation and onboarding with a disposable account.
-2. Install test infrastructure and add auth, validation, geometry, calculations, and RLS isolation tests.
+1. Complete a disposable full onboarding journey: create organization, farm, and GPS boundary; verify persistence and dashboard reads.
+2. Add auth, validation, geometry, calculations, RLS isolation, and Playwright journey coverage.
 3. Reconcile local workspace data with authenticated organization/farm onboarding; choose explicit import/sync/backup semantics.
 4. Audit every tenant table, policy, server action, API, and database role; run Organization A/B isolation checks on a disposable database.
 5. Complete a single farm/plot/crop/activity/inventory/expense/harvest/sale vertical workflow, then livestock/feed/health/sale.
@@ -119,4 +160,4 @@ Variables referenced by source: `DATABASE_URL`, `DATABASE_URL_APP`, `BETTER_AUTH
 7. Verify mobile GPS boundary capture and tablet/desktop flows on actual viewport sizes and devices.
 8. Add production integration health/status surfaces, environment docs, export workflows, operational monitoring, and a repeatable deployment checklist.
 
-This report describes the reviewed state and the local signup patch. It does not certify Vercel dashboard onboarding, complete tenant isolation, responsive field workflows, or the full commercial definition of done.
+This report does not certify the complete tenant-policy matrix, responsive field workflows, live geofencing with phone GPS, all provider integrations, or the full commercial definition of done.

@@ -2,9 +2,9 @@
 
 import dynamic from "next/dynamic";
 import { MapPinned } from "lucide-react";
-import type { MapPolygon } from "./LeafletMap";
+import type { MapPolygon } from "./MapLibreMap";
 
-const LeafletMap = dynamic(() => import("./LeafletMap"), {
+const FarmMap = dynamic(() => import("./MapLibreMap"), {
   ssr: false,
   loading: () => (
     <div className="grid h-full w-full place-items-center bg-muted/50 text-sm text-muted-foreground">
@@ -27,5 +27,5 @@ export function MiniMap({ polygons }: { polygons: MapPolygon[] }) {
       </div>
     );
   }
-  return <LeafletMap polygons={polygons} className="h-56 w-full rounded-2xl" showZoomControls={false} />;
+  return <FarmMap polygons={polygons} className="h-56 w-full rounded-2xl" showZoomControls={false} />;
 }
