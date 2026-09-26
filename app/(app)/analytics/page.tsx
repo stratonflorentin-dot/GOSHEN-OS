@@ -26,5 +26,5 @@ export default async function AnalyticsPage() {
   }
 
   const kpis = await getFarmKpis(user.id, farmWithCoords.farmId);
-  return <AnalyticsClient initialKpis={kpis} />;
+  return <AnalyticsClient initialKpis={kpis} farmId={farmWithCoords.farmId} />;
 }

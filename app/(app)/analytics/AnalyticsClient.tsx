@@ -30,7 +30,7 @@ const KPI_CARDS: KpiCard[] = [
   { label: "Inventory Value", value: 0, icon: TrendingUp, color: "text-muted-foreground" },
 ];
 
-export default function AnalyticsPage({ initialKpis }: { initialKpis: any }) {
+export default function AnalyticsPage({ initialKpis, farmId }: { initialKpis: any; farmId: string }) {
   const [kpis, setKpis] = useState(initialKpis);
   const [period, setPeriod] = useState<{ from: string; to: string }>({
     from: new Date(Date.now() - 365 * 86400_000).toISOString().slice(0, 10),
@@ -42,24 +42,35 @@ export default function AnalyticsPage({ initialKpis }: { initialKpis: any }) {
   const [seasonComp, setSeasonComp] = useState<any[]>([]);
   const [cashFlow, setCashFlow] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "plots" | "crops" | "livestock" | "seasons" | "cashflow">("overview");
 
   const chartRefs = useRef<Record<string, any>>({});
 
   async function fetchAnalytics() {
     setLoading(true);
+    setLoadError(null);
     try {
       const params = new URLSearchParams({
+        farmId,
         from: period.from,
         to: period.to,
       });
+      const fetchJson = async (path: string) => {
+        const response = await fetch(`${path}?${params}`);
+        const body = await response.json();
+        if (!response.ok) {
+          throw new Error(typeof body?.error === "string" ? body.error : "Analytics data could not be loaded.");
+        }
+        return body;
+      };
       const [k, plots, crops, livestock, seasons, cash] = await Promise.all([
-        fetch(`/api/analytics/kpis?${params}`).then((r) => r.json()),
-        fetch(`/api/analytics/plots?${params}`).then((r) => r.json()),
-        fetch(`/api/analytics/crops?${params}`).then((r) => r.json()),
-        fetch(`/api/analytics/livestock?${params}`).then((r) => r.json()),
-        fetch(`/api/analytics/seasons?${params}`).then((r) => r.json()),
-        fetch(`/api/analytics/cashflow?${params}`).then((r) => r.json()),
+        fetchJson("/api/analytics/kpis"),
+        fetchJson("/api/analytics/plots"),
+        fetchJson("/api/analytics/crops"),
+        fetchJson("/api/analytics/livestock"),
+        fetchJson("/api/analytics/seasons"),
+        fetchJson("/api/analytics/cashflow"),
       ]);
       setKpis(k);
       setPlotPerf(plots);
@@ -69,6 +80,7 @@ export default function AnalyticsPage({ initialKpis }: { initialKpis: any }) {
       setCashFlow(cash);
     } catch (e) {
       console.error(e);
+      setLoadError("Some analytics could not be refreshed. Showing the latest available farm totals.");
     } finally {
       setLoading(false);
     }
@@ -76,7 +88,13 @@ export default function AnalyticsPage({ initialKpis }: { initialKpis: any }) {
 
   useEffect(() => {
     fetchAnalytics();
-  }, [period]);
+  }, [period, farmId]);
+
+  useEffect(() => {
+    if (!loadError) return;
+    const timeout = window.setTimeout(() => setLoadError(null), 7000);
+    return () => window.clearTimeout(timeout);
+  }, [loadError]);
 
   function renderChart(id: string, option: any) {
     const el = document.getElementById(id);
@@ -202,6 +220,8 @@ export default function AnalyticsPage({ initialKpis }: { initialKpis: any }) {
           </button>
         </div>
       </div>
+
+      {loadError && <p role="status" className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">{loadError}</p>}
 
       {/* KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 mb-6">
