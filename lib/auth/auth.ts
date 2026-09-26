@@ -35,7 +35,6 @@ export const auth = betterAuth({
   database: {
     dialect: new PostgresJSDialect({ postgres: sql }),
     type: "postgres",
-    schemaName: "auth",
   },
   baseURL:
     process.env.BETTER_AUTH_URL ??
@@ -43,11 +42,15 @@ export const auth = betterAuth({
       ? `https://${process.env.VERCEL_URL}`
       : "http://localhost:3000"),
   secret: process.env.BETTER_AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+  advanced: {
+    database: { generateId: "uuid" },
+  },
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false, // Disable email verification for now
   },
   user: {
+    modelName: "auth.user",
     fields: {
       emailVerified: "email_verified",
       createdAt: "created_at",
@@ -55,6 +58,7 @@ export const auth = betterAuth({
     },
   },
   session: {
+    modelName: "auth.session",
     fields: {
       userId: "user_id",
       expiresAt: "expires_at",
@@ -65,6 +69,7 @@ export const auth = betterAuth({
     },
   },
   account: {
+    modelName: "auth.account",
     fields: {
       accountId: "account_id",
       providerId: "provider",
@@ -79,6 +84,7 @@ export const auth = betterAuth({
     },
   },
   verification: {
+    modelName: "auth.verification",
     fields: {
       expiresAt: "expires_at",
       createdAt: "created_at",
