@@ -32,9 +32,6 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: false, // Disable email verification for now
   },
-  advanced: {
-    useSchema: true, // Use the configured schema
-  },
 });
 
 export type Session = typeof auth.$Infer.Session;
