@@ -55,17 +55,28 @@ export function vertexMoveKeepsRingValid(ring: LatLng[], vertexIndex: number, ne
 
   const previous = (vertexIndex - 1 + count) % count;
   const after = (vertexIndex + 1) % count;
-  const adjacentEdges = new Set([previous, vertexIndex]);
-  const candidateEdges: [LatLng, LatLng][] = [
-    [points[previous], next],
-    [next, points[after]],
+  const beforePrevious = (vertexIndex - 2 + count) % count;
+  const candidateEdges: { a: LatLng; b: LatLng; ignoredEdges: Set<number> }[] = [
+    {
+      a: points[previous],
+      b: next,
+      // Ignore the previous edge, the other edge being replaced, and the
+      // edge that naturally meets this segment at its unchanged endpoint.
+      ignoredEdges: new Set([beforePrevious, previous, vertexIndex]),
+    },
+    {
+      a: next,
+      b: points[after],
+      // Ignore the next edge, the other edge being replaced, and the edge
+      // that naturally meets this segment at its unchanged endpoint.
+      ignoredEdges: new Set([previous, vertexIndex, after]),
+    },
   ];
 
-  for (const [a, b] of candidateEdges) {
+  for (const { a, b, ignoredEdges } of candidateEdges) {
     for (let edge = 0; edge < count; edge++) {
-      const nextEdge = (edge + 1) % count;
-      if (adjacentEdges.has(edge) || adjacentEdges.has(nextEdge)) continue;
-      if (segmentsIntersect(a, b, points[edge], points[nextEdge])) return false;
+      if (ignoredEdges.has(edge)) continue;
+      if (segmentsIntersect(a, b, points[edge], points[(edge + 1) % count])) return false;
     }
   }
   return true;
