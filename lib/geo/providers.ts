@@ -121,7 +121,10 @@ export function createExtrusionProvider(): Scene3DProvider {
         if (farm.boundary.length >= 4) {
           const bounds = new mapLibre.LngLatBounds();
           farm.boundary.forEach(([lng, lat]) => bounds.extend([lng, lat] as [number, number]));
-          map.fitBounds(bounds, { padding: { top: 80, right: 80, bottom: 80, left: 80 }, maxZoom: 19, duration, pitch: 52 });
+          // The local satellite coverage at this farm tops out around zoom 17.
+          // Closer auto-fits request empty tiles, so keep the fence in frame
+          // while staying within available imagery coverage.
+          map.fitBounds(bounds, { padding: { top: 80, right: 80, bottom: 80, left: 80 }, maxZoom: 17, duration, pitch: 52 });
         } else {
           map.flyTo({ center: [farm.centroid.lng, farm.centroid.lat], zoom: 18, pitch: 52, duration });
         }
@@ -233,7 +236,7 @@ export function createExtrusionProvider(): Scene3DProvider {
           if (ring.length < 4) return;
           const bounds = new mapLibre.LngLatBounds();
           ring.forEach(([lng, lat]) => bounds.extend([lng, lat] as [number, number]));
-          map.fitBounds(bounds, { padding: 100, maxZoom: 19, duration: 700, pitch: 52 });
+          map.fitBounds(bounds, { padding: 100, maxZoom: 17, duration: 700, pitch: 52 });
         },
         highlightPlot: (plotId) => {
           // Remove previous highlight
