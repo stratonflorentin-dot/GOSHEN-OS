@@ -32,18 +32,23 @@ export function MapWorkspace({
   plotPolygons,
   pendingNote,
   canEditBoundaries,
+  initialEditableId,
 }: {
   farmName: string;
   polygons: MapPolygon[];
   plotPolygons: MapPolygon[];
   pendingNote?: string;
   canEditBoundaries: boolean;
+  initialEditableId?: string | null;
 }) {
   const router = useRouter();
   const [visible, setVisible] = useState<Record<LayerKey, boolean>>({ farm: true, plots: false });
-  const [selected, setSelected] = useState<string | null>(null);
-  const [editableId, setEditableId] = useState<string | null>(null);
-  const [editedPolygons, setEditedPolygons] = useState<MapPolygon[]>([]);
+  const [selected, setSelected] = useState<string | null>(initialEditableId ?? null);
+  const [editableId, setEditableId] = useState<string | null>(initialEditableId ?? null);
+  const [editedPolygons, setEditedPolygons] = useState<MapPolygon[]>(() => {
+    const polygon = polygons.find((item) => item.id === initialEditableId);
+    return polygon ? [{ ...polygon, ring: polygon.ring.map((point) => [...point] as [number, number]) }] : [];
+  });
   const [undoStack, setUndoStack] = useState<{ id: string; ring: [number, number][] }[]>([]);
   const [editError, setEditError] = useState<string | null>(null);
   const [editSaved, setEditSaved] = useState(false);
@@ -136,6 +141,7 @@ export function MapWorkspace({
     setEditedPolygons([]);
     setUndoStack([]);
     setEditError(null);
+    if (initialEditableId) router.replace("/map", { scroll: false });
   }
 
   function saveBoundaryEdit() {
@@ -153,6 +159,7 @@ export function MapWorkspace({
         setEditedPolygons([]);
         setUndoStack([]);
         setEditSaved(true);
+        if (initialEditableId) router.replace("/map", { scroll: false });
         router.refresh();
       } catch {
         setEditError("Could not save the farm boundary. Please check your connection and try again.");

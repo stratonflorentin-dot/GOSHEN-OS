@@ -39,39 +39,91 @@ export function createExtrusionProvider(): Scene3DProvider {
     async mount(container: HTMLElement, scene: Scene3DModel): Promise<Scene3DHandle> {
       // Lazy load MapLibre
       const mapLibre = await import("maplibre-gl");
+      const mapTilerKey = process.env.NEXT_PUBLIC_MAPTILER_API_KEY?.trim();
+      const satelliteStyle = mapTilerKey
+        ? `https://api.maptiler.com/maps/hybrid-v4/style.json?key=${encodeURIComponent(mapTilerKey)}`
+        : {
+            version: 8 as const,
+            sources: {
+              imagery: {
+                type: "raster" as const,
+                tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+                tileSize: 256,
+                maxzoom: 19,
+                attribution: "Tiles © Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+              },
+            },
+            layers: [{ id: "imagery", type: "raster" as const, source: "imagery" }],
+          };
+      const farms = scene.farms?.length ? scene.farms : [{
+        farmId: scene.farmId,
+        farmName: scene.farmName,
+        boundary: scene.boundary.coordinates,
+        centroid: scene.boundary.centroid,
+      }];
+      const initialFarm = farms.find((farm) => farm.farmId === scene.farmId) ?? farms[0];
 
       // Initialize MapLibre with satellite basemap
       const map = new mapLibre.Map({
-        container: container.id,
-        style: {
-          version: 8,
-          sources: {
-            satellite: {
-              type: "raster",
-              tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
-              tileSize: 256,
-            },
-          },
-          layers: [
-            {
-              id: "satellite",
-              type: "raster",
-              source: "satellite",
-              minzoom: 0,
-              maxzoom: 22,
-            },
-          ],
-        },
-        center: [scene.boundary.centroid.lng, scene.boundary.centroid.lat],
-        zoom: 14,
-        pitch: 45, // 3D perspective
-        bearing: 0,
+        container,
+        style: satelliteStyle,
+        center: [initialFarm.centroid.lng, initialFarm.centroid.lat],
+        zoom: 17,
+        minZoom: 2,
+        maxZoom: 21,
+        pitch: 52,
+        bearing: -12,
+        scrollZoom: true,
       });
 
       // Wait for map to load before adding layers
       await new Promise<void>((resolve) => {
         map.on("load", () => resolve());
       });
+
+      if (mapTilerKey) {
+        map.addSource("goshen-3d-terrain", {
+          type: "raster-dem",
+          url: `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${encodeURIComponent(mapTilerKey)}`,
+          tileSize: 512,
+          maxzoom: 14,
+        });
+        map.setTerrain({ source: "goshen-3d-terrain", exaggeration: 1.15 });
+      }
+
+      const farmFeatures = farms.filter((farm) => farm.boundary.length >= 4).map((farm) => ({
+        type: "Feature" as const,
+        properties: { id: farm.farmId, name: farm.farmName },
+        geometry: { type: "Polygon" as const, coordinates: [farm.boundary] },
+      }));
+      map.addSource("goshen-3d-farms", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: farmFeatures },
+      });
+      map.addLayer({
+        id: "goshen-3d-farm-fill",
+        type: "fill",
+        source: "goshen-3d-farms",
+        paint: { "fill-color": "#16a765", "fill-opacity": 0.24 },
+      });
+      map.addLayer({
+        id: "goshen-3d-farm-outline",
+        type: "line",
+        source: "goshen-3d-farms",
+        paint: { "line-color": "#35f28b", "line-width": 4, "line-opacity": 1 },
+      });
+      const fitFarm = (farmId: string, duration = 500) => {
+        const farm = farms.find((candidate) => candidate.farmId === farmId);
+        if (!farm) return;
+        if (farm.boundary.length >= 4) {
+          const bounds = new mapLibre.LngLatBounds();
+          farm.boundary.forEach(([lng, lat]) => bounds.extend([lng, lat] as [number, number]));
+          map.fitBounds(bounds, { padding: { top: 80, right: 80, bottom: 80, left: 80 }, maxZoom: 19, duration, pitch: 52 });
+        } else {
+          map.flyTo({ center: [farm.centroid.lng, farm.centroid.lat], zoom: 18, pitch: 52, duration });
+        }
+      };
+      fitFarm(initialFarm.farmId, 0);
 
       // Add extruded plots
       scene.plots.forEach((plot) => {
@@ -99,7 +151,22 @@ export function createExtrusionProvider(): Scene3DProvider {
               "fill-extrusion-opacity": 0.8,
             },
           });
+
+          map.addLayer({
+            id: `plot-outline-${plot.plotId}`,
+            type: "line",
+            source: `plot-${plot.plotId}`,
+            paint: { "line-color": "#38bdf8", "line-width": 2.5, "line-opacity": 1 },
+          });
         }
+      });
+
+      map.addLayer({
+        id: "goshen-3d-farm-labels",
+        type: "symbol",
+        source: "goshen-3d-farms",
+        layout: { "symbol-placement": "point", "text-field": ["get", "name"], "text-size": 13, "text-allow-overlap": true },
+        paint: { "text-color": "#ffffff", "text-halo-color": "#06351f", "text-halo-width": 2 },
       });
 
       // Add extruded features (buildings, etc.)
@@ -143,7 +210,7 @@ export function createExtrusionProvider(): Scene3DProvider {
         setCamera: (position) => {
           map.flyTo({
             center: [position.lng, position.lat],
-            zoom: 15,
+            zoom: 18,
             pitch: 60,
             duration: 1000,
           });
@@ -151,8 +218,17 @@ export function createExtrusionProvider(): Scene3DProvider {
         flyTo: (target) => {
           map.flyTo({
             center: [target.lng, target.lat],
+            zoom: 19,
+            pitch: 52,
             duration: target.duration || 1000,
           });
+        },
+        zoomBy: (delta) => map.zoomTo(Math.max(2, Math.min(21, map.getZoom() + delta)), { duration: 250 }),
+        fitBoundary: (ring) => {
+          if (ring.length < 4) return;
+          const bounds = new mapLibre.LngLatBounds();
+          ring.forEach(([lng, lat]) => bounds.extend([lng, lat] as [number, number]));
+          map.fitBounds(bounds, { padding: 100, maxZoom: 19, duration: 700, pitch: 52 });
         },
         highlightPlot: (plotId) => {
           // Remove previous highlight

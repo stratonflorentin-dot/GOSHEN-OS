@@ -6,6 +6,12 @@
 export type Scene3DModel = {
   farmId: string;
   farmName: string;
+  farms?: Array<{
+    farmId: string;
+    farmName: string;
+    boundary: number[][];
+    centroid: { lat: number; lng: number };
+  }>;
   boundary: {
     coordinates: number[][]; // GeoJSON Polygon coordinates
     centroid: { lat: number; lng: number };
@@ -37,6 +43,8 @@ export type Scene3DHandle = {
   resize: () => void;
   setCamera: (position: { lat: number; lng: number; height: number }) => void;
   flyTo: (target: { lat: number; lng: number; duration?: number }) => void;
+  zoomBy: (delta: number) => void;
+  fitBoundary: (ring: number[][]) => void;
   highlightPlot: (plotId: string | null) => void;
 };
 

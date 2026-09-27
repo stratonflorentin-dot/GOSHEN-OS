@@ -7,7 +7,11 @@ import type { MapPolygon } from "@/features/map/MapLibreMap";
 import { geoJsonRingToLatLng } from "@/features/map/geometry";
 import { MapWorkspace } from "@/features/map/MapWorkspace";
 
-export default async function MapPage() {
+export default async function MapPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ edit?: string }>;
+}) {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
@@ -15,6 +19,7 @@ export default async function MapPage() {
   if (memberships.length === 0) redirect("/onboarding");
 
   const org = memberships[0].organization;
+  const params = await searchParams;
   const [farms, plots] = await Promise.all([
     listFarmGeo(user.id, org.id),
     listPlotGeo(user.id, org.id),
@@ -44,12 +49,18 @@ export default async function MapPage() {
       };
     });
 
+  const canEditBoundaries = ["owner", "admin", "manager"].includes(memberships[0].role);
+  const initialEditableId = canEditBoundaries && params.edit && /^[0-9a-f-]{36}$/i.test(params.edit) && polygons.some((polygon) => polygon.id === params.edit)
+    ? params.edit
+    : null;
+
   return (
     <MapWorkspace
       farmName={farms.length === 1 ? farms[0].name : `${farms.length} farm locations`}
       polygons={polygons}
       plotPolygons={plotPolygons}
-      canEditBoundaries={["owner", "admin", "manager"].includes(memberships[0].role)}
+      canEditBoundaries={canEditBoundaries}
+      initialEditableId={initialEditableId}
       pendingNote={
         polygons.length === 0
           ? "No farm boundaries captured yet. Create a farm and walk its boundary to see it here."
