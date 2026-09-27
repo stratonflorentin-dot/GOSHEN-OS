@@ -144,7 +144,7 @@ export default function View3DClient({
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px]">
         <main className="relative min-h-[60svh] bg-muted lg:min-h-[calc(100svh-8rem)]">
-          <div ref={containerRef} id="scene3d-container" className="absolute inset-0" />
+          <div ref={containerRef} id="scene3d-container" className="absolute inset-0 h-full w-full" />
           {isLoading && <div className="absolute inset-0 z-10 grid place-items-center bg-background/70 text-sm text-muted-foreground">Loading satellite and terrain layers…</div>}
           {error && (
             <div role="alert" className="absolute inset-0 z-20 grid place-items-center bg-background/90 p-6 text-center">
