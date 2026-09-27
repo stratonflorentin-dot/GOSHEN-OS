@@ -75,6 +75,9 @@ export function createExtrusionProvider(): Scene3DProvider {
         bearing: -12,
         scrollZoom: true,
       });
+      map.addControl(new mapLibre.NavigationControl({ showCompass: true }), "bottom-right");
+      const resizeObserver = new ResizeObserver(() => map.resize());
+      resizeObserver.observe(container);
 
       // Wait for map to load before adding layers
       await new Promise<void>((resolve) => {
@@ -124,6 +127,7 @@ export function createExtrusionProvider(): Scene3DProvider {
         }
       };
       fitFarm(initialFarm.farmId, 0);
+      requestAnimationFrame(() => map.resize());
 
       // Add extruded plots
       scene.plots.forEach((plot) => {
@@ -202,6 +206,7 @@ export function createExtrusionProvider(): Scene3DProvider {
 
       return {
         destroy: () => {
+          resizeObserver.disconnect();
           map.remove();
         },
         resize: () => {

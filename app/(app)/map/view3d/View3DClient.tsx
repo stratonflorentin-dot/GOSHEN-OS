@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { registerScene3DProvider, getDefaultScene3DProvider, createExtrusionProvider } from "@/lib/geo/providers";
 import type { Scene3DModel, Scene3DHandle } from "@/lib/geo/scene3d";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { Box, Layers, ArrowLeft, ZoomIn, ZoomOut, MapPinned, Pencil, LocateFixed } from "lucide-react";
 import Link from "next/link";
 
