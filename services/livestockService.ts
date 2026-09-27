@@ -22,6 +22,7 @@ export type LivestockBatch = {
   organizationId: string;
   farmId: string;
   groupId: string;
+  seasonId: string | null;
   batchCode: string;
   status: string;
   startDate: string;
@@ -33,6 +34,12 @@ export type LivestockBatch = {
   avgStartWeightKg: string | null;
   avgCurrentWeightKg: string | null;
   targetWeightKg: string | null;
+  sourceType: string | null;
+  sourceId: string | null;
+  sourceDetails: string | null;
+  sourceCost: string | null;
+  breed: string | null;
+  strain: string | null;
   notes: string | null;
   createdAt: string;
 };
@@ -125,6 +132,7 @@ function toLivestockBatch(row: Record<string, unknown>): LivestockBatch {
     organizationId: row.organization_id as string,
     farmId: row.farm_id as string,
     groupId: row.group_id as string,
+    seasonId: (row.season_id as string | null) ?? null,
     batchCode: row.batch_code as string,
     status: row.status as string,
     startDate: String(row.start_date),
@@ -136,6 +144,12 @@ function toLivestockBatch(row: Record<string, unknown>): LivestockBatch {
     avgStartWeightKg: (row.avg_start_weight_kg as string | null) ?? null,
     avgCurrentWeightKg: (row.avg_current_weight_kg as string | null) ?? null,
     targetWeightKg: (row.target_weight_kg as string | null) ?? null,
+    sourceType: (row.source_type as string | null) ?? null,
+    sourceId: (row.source_id as string | null) ?? null,
+    sourceDetails: (row.source_details as string | null) ?? null,
+    sourceCost: (row.source_cost as string | null) ?? null,
+    breed: (row.breed as string | null) ?? null,
+    strain: (row.strain as string | null) ?? null,
     notes: (row.notes as string | null) ?? null,
     createdAt: String(row.created_at),
   };
@@ -246,16 +260,100 @@ export async function listLivestockGroups(userId: string, organizationId: string
 
 export async function createLivestockBatch(userId: string, input: CreateLivestockBatchInput): Promise<LivestockBatch> {
   return withUser(userId, async (db) => {
+    if (input.seasonId) {
+      const season = await db`select id from public.seasons where id=${input.seasonId} and organization_id=${input.organizationId}`;
+      if (!season[0]) throw new Error("Select a season in your current organization.");
+    }
+    let allocatedSourceCost = input.sourceCost ?? 0;
+    if (input.sourceType === "external_hatchery" && input.sourceId) {
+      await db`select pg_advisory_xact_lock(hashtextextended(${input.sourceId}, 0))`;
+      const source = await db`
+        select quantity_delivered, dead_on_arrival, price_per_chick, transport_cost, other_cost,
+          breed, strain, supplier_name,
+          (select coalesce(sum(initial_quantity), 0)::int from public.livestock_batches
+           where source_type = 'external_hatchery' and source_id = ho.id) as already_assigned
+        from public.hatchery_orders ho
+        where ho.id = ${input.sourceId} and ho.organization_id = ${input.organizationId}
+          and ho.farm_id = ${input.farmId} for update
+      `;
+      if (!source[0]) throw new Error("The selected hatchery delivery was not found for this farm.");
+      const available = Number(source[0].quantity_delivered) - Number(source[0].dead_on_arrival) - Number(source[0].already_assigned);
+      if (input.initialQuantity > available) throw new Error(`This delivery has only ${Math.max(0, available)} healthy chicks available to assign.`);
+      const acquisitionTotal = Number(source[0].quantity_delivered) * Number(source[0].price_per_chick) + Number(source[0].transport_cost) + Number(source[0].other_cost);
+      allocatedSourceCost = available + Number(source[0].already_assigned) > 0
+        ? acquisitionTotal * input.initialQuantity / (Number(source[0].quantity_delivered) - Number(source[0].dead_on_arrival))
+        : 0;
+      input.breed ||= (source[0].breed as string | null) ?? undefined;
+      input.strain ||= (source[0].strain as string | null) ?? undefined;
+    } else if (input.sourceType === "farm_incubator" && input.sourceId) {
+      await db`select pg_advisory_xact_lock(hashtextextended(${input.sourceId}, 0))`;
+      const source = await db`
+        select healthy_chicks, breed, strain,
+          (select coalesce(sum(initial_quantity), 0)::int from public.livestock_batches
+           where source_type = 'farm_incubator' and source_id = ib.id) as already_assigned,
+          (egg_cost + operating_cost + (select coalesce(sum(amount), 0) from public.incubation_costs where incubation_batch_id = ib.id))::numeric as total_cost
+        from public.incubation_batches ib
+        where ib.id = ${input.sourceId} and ib.organization_id = ${input.organizationId}
+          and ib.farm_id = ${input.farmId} for update
+      `;
+      if (!source[0]) throw new Error("The selected incubation batch was not found for this farm.");
+      const available = Number(source[0].healthy_chicks) - Number(source[0].already_assigned);
+      if (input.initialQuantity > available) throw new Error(`This hatch has only ${Math.max(0, available)} healthy chicks available to assign.`);
+      allocatedSourceCost = Number(source[0].healthy_chicks) > 0
+        ? Number(source[0].total_cost) * input.initialQuantity / Number(source[0].healthy_chicks)
+        : 0;
+      input.breed ||= (source[0].breed as string | null) ?? undefined;
+      input.strain ||= (source[0].strain as string | null) ?? undefined;
+    }
     const rows = await db`
       insert into public.livestock_batches
-        (organization_id, farm_id, group_id, batch_code, start_date,
-         initial_quantity, current_quantity, unit, avg_start_weight_kg, target_weight_kg, notes)
+        (organization_id, farm_id, group_id, season_id, batch_code, start_date,
+         initial_quantity, current_quantity, unit, avg_start_weight_kg, target_weight_kg, notes,
+         source_type, source_id, source_details, source_cost, breed, strain)
       values
-        (${input.organizationId}, ${input.farmId}, ${input.groupId}, ${input.batchCode}, ${input.startDate},
-         ${input.initialQuantity}, ${input.initialQuantity}, ${input.unit}, ${input.avgStartWeightKg || null}, ${input.targetWeightKg || null}, ${input.notes || null})
+        (${input.organizationId}, ${input.farmId}, ${input.groupId}, ${input.seasonId || null}, ${input.batchCode}, ${input.startDate},
+         ${input.initialQuantity}, ${input.initialQuantity}, ${input.unit}, ${input.avgStartWeightKg || null}, ${input.targetWeightKg || null}, ${input.notes || null},
+         ${input.sourceType}, ${input.sourceId || null}, ${input.sourceDetails || null}, ${allocatedSourceCost}, ${input.breed || null}, ${input.strain || null})
       returning *
     `;
     return toLivestockBatch(rows[0]);
+  });
+}
+
+export type ChickSourceOptions = {
+  hatcheryOrders: { id: string; label: string; available: number }[];
+  incubationBatches: { id: string; label: string; available: number }[];
+};
+
+export async function listChickSourceOptions(userId: string, organizationId: string, farmId?: string): Promise<ChickSourceOptions> {
+  return withUser(userId, async (db) => {
+    const orders = farmId ? await db`
+      select ho.id, ho.supplier_name, ho.batch_reference, ho.order_number, ho.delivery_date, f.name as farm_name,
+        (ho.quantity_delivered - ho.dead_on_arrival - (select coalesce(sum(lb.initial_quantity),0)::int from public.livestock_batches lb where lb.source_type='external_hatchery' and lb.source_id=ho.id)) as available
+      from public.hatchery_orders ho join public.farms f on f.id=ho.farm_id where ho.organization_id=${organizationId} and ho.farm_id=${farmId}
+        and ho.quantity_delivered > ho.dead_on_arrival order by ho.delivery_date desc nulls last, ho.created_at desc
+    ` : await db`select ho.id, ho.supplier_name, ho.batch_reference, ho.order_number, ho.delivery_date, f.name as farm_name,
+        (ho.quantity_delivered - ho.dead_on_arrival - (select coalesce(sum(lb.initial_quantity),0)::int from public.livestock_batches lb where lb.source_type='external_hatchery' and lb.source_id=ho.id)) as available
+      from public.hatchery_orders ho join public.farms f on f.id=ho.farm_id where ho.organization_id=${organizationId} and ho.quantity_delivered > ho.dead_on_arrival
+      order by ho.delivery_date desc nulls last, ho.created_at desc`;
+    const hatches = farmId ? await db`
+      select ib.id, ib.batch_code, ib.actual_hatch_date, ib.healthy_chicks, f.name as farm_name,
+        (ib.healthy_chicks - (select coalesce(sum(lb.initial_quantity),0)::int from public.livestock_batches lb where lb.source_type='farm_incubator' and lb.source_id=ib.id)) as available
+      from public.incubation_batches ib join public.farms f on f.id=ib.farm_id where ib.organization_id=${organizationId} and ib.farm_id=${farmId} and ib.healthy_chicks > 0
+      order by ib.actual_hatch_date desc nulls last, ib.created_at desc
+    ` : await db`select ib.id, ib.batch_code, ib.actual_hatch_date, ib.healthy_chicks, f.name as farm_name,
+      (ib.healthy_chicks - (select coalesce(sum(lb.initial_quantity),0)::int from public.livestock_batches lb where lb.source_type='farm_incubator' and lb.source_id=ib.id)) as available
+      from public.incubation_batches ib join public.farms f on f.id=ib.farm_id where ib.organization_id=${organizationId} and ib.healthy_chicks > 0 order by ib.actual_hatch_date desc nulls last, ib.created_at desc`;
+    return {
+      hatcheryOrders: orders.filter((r) => Number(r.available) > 0).map((r) => ({
+        id: String(r.id), label: `${r.farm_name} — ${r.supplier_name}${r.batch_reference ? ` · ${r.batch_reference}` : r.order_number ? ` · ${r.order_number}` : ""}${r.delivery_date ? ` · ${String(r.delivery_date).slice(0, 10)}` : ""}`,
+        available: Number(r.available),
+      })),
+      incubationBatches: hatches.filter((r) => Number(r.available) > 0).map((r) => ({
+        id: String(r.id), label: `${r.farm_name} — ${r.batch_code}${r.actual_hatch_date ? ` · ${String(r.actual_hatch_date).slice(0, 10)}` : ""}`,
+        available: Number(r.available),
+      })),
+    };
   });
 }
 
@@ -439,18 +537,18 @@ export async function getBatchFinancials(userId: string, batchId: string): Promi
   totalMedicineCost: number;
   totalVaccinationCost: number;
   totalOtherCost: number;
+  chickSourceCost: number;
   totalRevenue: number;
   mortalityRate: number;
   fcr: number | null; // Feed Conversion Ratio
 }> {
   return withUser(userId, async (db) => {
-    const [feed, events, sales] = await Promise.all([
+    const [feed, events, sales, batch] = await Promise.all([
       db`select sum(total_cost)::numeric as total from public.livestock_feed where batch_id = ${batchId}`,
       db`select event_type, sum(cost)::numeric as total from public.livestock_events where batch_id = ${batchId} group by event_type`,
       db`select sum(total_revenue)::numeric as total from public.livestock_sales where batch_id = ${batchId}`,
+      db`select initial_quantity, current_quantity, mortality_count, source_cost from public.livestock_batches where id = ${batchId}`,
     ]);
-
-    const batch = await db`select initial_quantity, current_quantity, mortality_count from public.livestock_batches where id = ${batchId}`;
     const b = batch[0];
 
     const feedCost = Number(feed[0]?.total ?? 0);
@@ -480,6 +578,7 @@ export async function getBatchFinancials(userId: string, batchId: string): Promi
       totalMedicineCost: medCost,
       totalVaccinationCost: vaccCost,
       totalOtherCost: otherCost,
+      chickSourceCost: Number(b?.source_cost ?? 0),
       totalRevenue: revenue,
       mortalityRate,
       fcr,

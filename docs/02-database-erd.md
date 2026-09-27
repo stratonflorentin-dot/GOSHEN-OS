@@ -252,7 +252,7 @@ erDiagram
 Identity: `profiles, organizations, organization_members, farm_members, invitations, platform_admins, roles, role_permissions`
 Farms/GIS: `farms, farm_boundaries_versions, farm_settings, plots, plot_history, plot_soil_records, map_features`
 Crops: `seasons, crops, crop_varieties, crop_seasons, crop_activities, crop_inputs, harvests`
-Livestock: `livestock_species, livestock_groups, livestock_batches, livestock_events, livestock_health, livestock_feed, livestock_sales`
+Livestock: `livestock_species, livestock_groups, livestock_batches, livestock_events, livestock_health, livestock_feed, livestock_sales, hatcheries, hatchery_orders, incubators, incubation_batches, incubation_events, incubation_costs`
 Inventory/Procurement: `inventory_categories, inventory_items, inventory_locations, inventory_movements, suppliers, purchase_requests, purchase_order_items, purchase_orders, goods_receipt_items, goods_receipts, supplier_invoices`
 Finance: `accounts, financial_accounts, journal_entries, journal_lines, payments, expenses, revenues, cost_allocations`
 Ops: `workers, labor_records, equipment, equipment_usage, maintenance_records, water_sources, irrigation_zones, irrigation_records, soil_records (plot_soil_records), storage_facilities, storage_records`

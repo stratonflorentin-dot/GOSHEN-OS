@@ -19,12 +19,19 @@ export async function createLivestockBatchAction(formData: FormData) {
     organizationId: memberships[0].organization.id,
     farmId: formData.get("farmId"),
     groupId: formData.get("groupId"),
+    seasonId: formData.get("seasonId") || undefined,
     batchCode: formData.get("batchCode"),
     startDate: formData.get("startDate"),
     initialQuantity: Number(formData.get("initialQuantity")),
     unit: formData.get("unit") || "head",
     avgStartWeightKg: formData.get("avgStartWeightKg") ? Number(formData.get("avgStartWeightKg")) : undefined,
     targetWeightKg: formData.get("targetWeightKg") ? Number(formData.get("targetWeightKg")) : undefined,
+    sourceType: formData.get("sourceType"),
+    sourceId: formData.get("sourceId") || undefined,
+    sourceDetails: formData.get("sourceDetails") || undefined,
+    sourceCost: formData.get("sourceCost") ? Number(formData.get("sourceCost")) : undefined,
+    breed: formData.get("breed") || undefined,
+    strain: formData.get("strain") || undefined,
     notes: formData.get("notes") || undefined,
   });
   if (!parsed.success) {
@@ -32,7 +39,12 @@ export async function createLivestockBatchAction(formData: FormData) {
     redirect(`/livestock/new?error=${encodeURIComponent(msg)}`);
   }
 
-  await createLivestockBatch(user.id, parsed.data);
+  try {
+    await createLivestockBatch(user.id, parsed.data);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Could not create livestock batch";
+    redirect(`/livestock/new?error=${encodeURIComponent(msg)}`);
+  }
   revalidatePath("/livestock");
   redirect("/livestock");
 }

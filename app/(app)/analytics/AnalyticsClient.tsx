@@ -326,6 +326,7 @@ export default function AnalyticsPage({ initialKpis, farmId }: { initialKpis: an
                         <th className="text-right p-2 font-medium text-muted-foreground">Feed (kg)</th>
                         <th className="text-right p-2 font-medium text-muted-foreground">FCR</th>
                         <th className="text-right p-2 font-medium text-muted-foreground">Revenue</th>
+                        <th className="text-right p-2 font-medium text-muted-foreground">Chick source cost</th>
                         <th className="text-right p-2 font-medium text-muted-foreground">Cost</th>
                         <th className="text-right p-2 font-medium text-muted-foreground">Margin %</th>
                       </tr>
@@ -341,6 +342,7 @@ export default function AnalyticsPage({ initialKpis, farmId }: { initialKpis: an
                           <td className="p-2 text-right font-mono">{b.feedConsumedKg.toLocaleString()}</td>
                           <td className="p-2 text-right font-mono">{b.fcr ? b.fcr.toFixed(2) : "—"}</td>
                           <td className="p-2 text-right font-mono">{formatCurrency(b.totalRevenue)}</td>
+                          <td className="p-2 text-right font-mono">{formatCurrency(b.chickSourceCost ?? 0)}</td>
                           <td className="p-2 text-right font-mono">{formatCurrency(b.totalCost)}</td>
                           <td className="p-2 text-right font-mono {b.marginPct >= 0 ? 'text-success' : 'text-destructive'}">{b.marginPct.toFixed(1)}%</td>
                         </tr>

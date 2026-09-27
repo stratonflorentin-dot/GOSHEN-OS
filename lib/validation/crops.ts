@@ -148,14 +148,30 @@ export const createLivestockBatchSchema = z.object({
   organizationId: z.string().uuid(),
   farmId: z.string().uuid(),
   groupId: z.string().uuid(),
+  seasonId: z.string().uuid().optional(),
   batchCode: z.string().trim().min(1).max(60),
   startDate: z.string().date(),
   initialQuantity: z.number().int().positive().max(100000), // Max 100k animals
   unit: z.string().min(1).default("head"),
   avgStartWeightKg: z.number().positive().max(500).optional(), // Max 500kg per animal
   targetWeightKg: z.number().positive().max(1000).optional(), // Max 1 ton target weight
+  sourceType: z.enum(["external_hatchery", "farm_incubator", "purchased_fertile_eggs", "farm_eggs", "farm_transfer", "other"]),
+  sourceId: z.string().uuid().optional(),
+  sourceDetails: z.string().trim().max(500).optional(),
+  sourceCost: z.number().nonnegative().optional(),
+  breed: z.string().trim().max(120).optional(),
+  strain: z.string().trim().max(120).optional(),
   notes: z.string().trim().max(2000).optional(),
 }).refine((data) => {
+  if (["external_hatchery", "farm_incubator"].includes(data.sourceType)) return Boolean(data.sourceId);
+  return true;
+}, { message: "Select the hatchery order or incubation batch for this origin", path: ["sourceId"] }).refine((data) => {
+  if (["purchased_fertile_eggs", "farm_eggs", "farm_transfer", "other"].includes(data.sourceType)) return Boolean(data.sourceDetails?.trim());
+  return true;
+}, { message: "Describe this chick source", path: ["sourceDetails"] }).refine((data) => {
+  if (["purchased_fertile_eggs", "farm_eggs", "farm_transfer", "other"].includes(data.sourceType)) return !data.sourceId;
+  return true;
+}, { message: "Enter origin details rather than selecting a hatchery or hatch record", path: ["sourceId"] }).refine((data) => {
   // Agricultural validation: realistic weight ranges by species
   if (data.avgStartWeightKg && data.targetWeightKg) {
     // Target weight should be at least 20% higher than start weight

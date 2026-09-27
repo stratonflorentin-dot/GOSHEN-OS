@@ -3,7 +3,8 @@ import { Beef, ArrowLeft, Plus, MapPin, CalendarDays, Scale } from "lucide-react
 import { getSessionUser } from "@/lib/auth/server";
 import { listMemberships } from "@/services/orgService";
 import { listFarmGeo } from "@/services/farmService";
-import { listLivestockGroups, listLivestockSpecies } from "@/services/livestockService";
+import { listChickSourceOptions, listLivestockGroups, listLivestockSpecies } from "@/services/livestockService";
+import { listSeasons } from "@/services/cropService";
 import { createLivestockBatchAction } from "./actions";
 
 export default async function NewLivestockBatchPage({
@@ -22,6 +23,8 @@ export default async function NewLivestockBatchPage({
   const farms = await listFarmGeo(user.id, org.id);
   const groups = await listLivestockGroups(user.id, org.id);
   const species = await listLivestockSpecies(user.id);
+  const sources = await listChickSourceOptions(user.id, org.id);
+  const seasons = await listSeasons(user.id, org.id);
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -76,6 +79,51 @@ export default async function NewLivestockBatchPage({
               <option key={g.id} value={g.id}>{g.name}</option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label htmlFor="seasonId" className="field-label">Production season <span className="text-muted-foreground">(optional)</span></label>
+          <select id="seasonId" name="seasonId" className="field-input"><option value="">No season selected</option>{seasons.map((season)=><option key={season.id} value={season.id}>{season.name} · {season.startDate}</option>)}</select>
+        </div>
+
+        <div>
+          <label htmlFor="sourceType" className="field-label">Animal origin <span className="text-destructive">*</span></label>
+          <select id="sourceType" name="sourceType" required className="field-input">
+            <option value="">Select origin</option>
+            <option value="external_hatchery">External hatchery / factory chicks</option>
+            <option value="farm_incubator">Farm incubator hatch</option>
+            <option value="purchased_fertile_eggs">Purchased fertile eggs</option>
+            <option value="farm_eggs">Farm-produced eggs</option>
+            <option value="farm_transfer">Transfer from another farm</option>
+            <option value="other">Other documented source</option>
+          </select>
+          <p className="mt-1 text-xs text-muted-foreground">Every new batch keeps its origin and chick cost for traceability.</p>
+        </div>
+
+        <div>
+          <label htmlFor="sourceId" className="field-label">Delivery or hatch record <span className="text-muted-foreground">(if applicable)</span></label>
+          <select id="sourceId" name="sourceId" className="field-input">
+            <option value="">Choose a matching record</option>
+            {sources.hatcheryOrders.map((item) => <option key={`order-${item.id}`} value={item.id}>Hatchery · {item.label} · {item.available} available</option>)}
+            {sources.incubationBatches.map((item) => <option key={`hatch-${item.id}`} value={item.id}>Farm hatch · {item.label} · {item.available} available</option>)}
+          </select>
+          <p className="mt-1 text-xs text-muted-foreground">Required for the external hatchery and farm incubator origins. Records are checked against the selected farm and remaining healthy chicks.</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div><label htmlFor="breed" className="field-label">Breed</label><input id="breed" name="breed" maxLength={120} className="field-input" /></div>
+          <div><label htmlFor="strain" className="field-label">Strain</label><input id="strain" name="strain" maxLength={120} className="field-input" /></div>
+        </div>
+
+        <div>
+          <label htmlFor="sourceDetails" className="field-label">Origin details <span className="text-muted-foreground">(required for other sources)</span></label>
+          <input id="sourceDetails" name="sourceDetails" maxLength={500} placeholder="Supplier, farm, egg source, or other details" className="field-input" />
+        </div>
+
+        <div>
+          <label htmlFor="sourceCost" className="field-label">Source cost for this batch</label>
+          <input id="sourceCost" name="sourceCost" type="number" min="0" step="0.01" className="field-input" />
+          <p className="mt-1 text-xs text-muted-foreground">For hatchery and incubator records, the system allocates the recorded unit cost automatically.</p>
         </div>
 
         <div>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
-  BarChart3, Beef, Boxes, ChevronLeft, Cloud,
+  BarChart3, Beef, Boxes, ChevronLeft, Cloud, Egg,
   Command, Home, Leaf, LogOut, Map, Menu, Plus, Search,
   Sprout, Wallet, X, type LucideIcon,
 } from "lucide-react";
@@ -23,6 +23,7 @@ const GROUPS: { label: string; items: Item[] }[] = [
   { label: "Production", items: [
     { href: "/crops", label: "Crops", icon: Sprout },
     { href: "/livestock", label: "Livestock", icon: Beef },
+    { href: "/livestock/chicks", label: "Chick origins & incubation", icon: Egg },
     { href: "/inventory", label: "Inventory", icon: Boxes },
   ] },
   { label: "Insights & finance", items: [

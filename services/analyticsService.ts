@@ -86,6 +86,7 @@ export type LivestockBatchPerformance = {
   mortalityRate: number;
   feedConsumedKg: number;
   feedCost: number;
+  chickSourceCost: number;
   totalCost: number;
   totalRevenue: number;
   grossMargin: number;
@@ -179,7 +180,7 @@ export async function getFarmKpis(
         select
           count(*) filter (where lb.status = 'active')::int as active_batches,
           coalesce(sum(ls.total_revenue), 0)::numeric as total_livestock_revenue,
-          coalesce(sum(coalesce(lf.total_cost, 0) + coalesce(lh.total_cost, 0) + coalesce(lr.total_cost, 0)), 0)::numeric as total_livestock_cost
+          coalesce(sum(coalesce(lb.source_cost, 0) + coalesce(lf.total_cost, 0) + coalesce(lh.total_cost, 0) + coalesce(lr.total_cost, 0)), 0)::numeric as total_livestock_cost
         from public.livestock_batches lb
         left join (
           select batch_id, sum(total_revenue) as total_revenue from public.livestock_sales
@@ -444,7 +445,8 @@ export async function getLivestockBatchPerformance(
           else 0 end as mortality_rate,
         coalesce(lf.quantity_kg, 0)::numeric as feed_consumed_kg,
         coalesce(lf.total_cost, 0)::numeric as feed_cost,
-        (coalesce(lf.total_cost, 0) + coalesce(lh.total_cost, 0) + coalesce(lr.total_cost, 0))::numeric as total_cost,
+        (coalesce(lb.source_cost, 0) + coalesce(lf.total_cost, 0) + coalesce(lh.total_cost, 0) + coalesce(lr.total_cost, 0))::numeric as total_cost,
+        coalesce(lb.source_cost, 0)::numeric as chick_source_cost,
         coalesce(ls2.total_revenue, 0)::numeric as total_revenue
       from public.livestock_batches lb
       join public.livestock_groups lg on lg.id = lb.group_id
@@ -483,6 +485,7 @@ export async function getLivestockBatchPerformance(
         mortalityRate: Number(r.mortality_rate ?? 0),
         feedConsumedKg: feedKg,
         feedCost: Number(r.feed_cost ?? 0),
+        chickSourceCost: Number(r.chick_source_cost ?? 0),
         totalCost: cost,
         totalRevenue: revenue,
         grossMargin: revenue - cost,

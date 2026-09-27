@@ -41,6 +41,32 @@ livestock_batches (BROILER-001; initial/current counts; arrival date)
   ├─ livestock_health (vaccination, medication, observations, vet visits, symptoms, treatments)
   ├─ livestock_feed (feed type, quantity kg, cost, inventory link)
   └─ livestock_sales → sales/revenue
+
+Poultry chick origin is stored on each `livestock_batches` row. `source_type`
+distinguishes an external hatchery, farm incubator, purchased fertile eggs,
+farm eggs, a transfer, or another documented source; `source_id` links hatchery
+orders and incubation batches, and `source_cost` allocates the actual source
+cost to the receiving batch. Legacy batches remain readable with an unknown
+origin until the farm records it.
+
+```text
+hatcheries → hatchery_orders (ordered/delivered/DOA, breed, vaccination, costs)
+farms → incubators → incubation_batches → incubation_events
+                                   ├─ incubation_costs
+                                   └─ livestock_batches (source_type/source_id)
+```
+
+The application refuses to assign more healthy chicks than remain in a hatchery
+delivery or hatch. Hatchery healthy quantity is delivered less DOA. Acquisition
+cost is chick price × delivered count + transport + other costs, allocated by
+healthy chicks. Incubation cost is fertile egg cost + operating cost + recorded
+egg, electricity, fuel, labor, cleaning, transport, and other expenses. Hatch
+rate is explicitly **healthy chicks ÷ eggs loaded × 100**. Incubator capacity,
+farm ownership, and outcome-count invariants are validated before saving.
+Manual candling and temperature/humidity observations are stored as timeline
+events; no IoT hardware is required. These tenant tables use the same
+organization membership and role policies as livestock batches and write to
+the audit log.
 ```
 - Counts: trigger-maintained from events; **negative counts impossible**;
   physical counts use `count_correction` (audited, reason required).

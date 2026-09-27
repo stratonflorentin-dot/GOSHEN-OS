@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Beef, Plus, ArrowLeft, MapPin, TrendingUp, CircleCheck, AlertTriangle } from "lucide-react";
+import { Beef, Plus, MapPin, TrendingUp, CircleCheck, AlertTriangle, Egg } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getSessionUser } from "@/lib/auth/server";
 import { listMemberships } from "@/services/orgService";
@@ -26,12 +26,10 @@ export default async function LivestockPage() {
           </h1>
           <p className="text-sm text-muted-foreground">{org.name}</p>
         </div>
-        <a
-          href="/livestock/new"
-          className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-600"
-        >
-          <Plus className="h-4 w-4" /> New batch
-        </a>
+        <div className="flex flex-wrap gap-2">
+          <a href="/livestock/chicks" className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2.5 text-sm font-medium hover:bg-muted"><Egg className="h-4 w-4"/>Chick production</a>
+          <a href="/livestock/new" className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-600"><Plus className="h-4 w-4"/>New batch</a>
+        </div>
       </div>
 
       {batches.length === 0 ? (
@@ -64,9 +62,8 @@ export default async function LivestockPage() {
                 </span>
                 <div>
                   <h2 className="font-semibold">{b.batchCode} — {b.groupId}</h2>
-                  <p className="text-sm text-muted-foreground">
-                    {b.groupId} · {b.status} · {b.currentQuantity} {b.unit}
-                  </p>
+                  <p className="text-sm text-muted-foreground">{b.groupId} · {b.status} · {b.currentQuantity} {b.unit}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Origin: {b.sourceType?.replaceAll("_", " ") ?? "legacy record"}{b.breed ? ` · ${b.breed}` : ""}{b.sourceCost ? ` · Source cost ${Number(b.sourceCost).toLocaleString()}` : ""}</p>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-4 text-sm sm:ml-auto">
