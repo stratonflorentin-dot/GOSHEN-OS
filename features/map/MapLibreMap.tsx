@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl, { type GeoJSONSource, type Map as MapLibreInstance, type StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Map as MapIcon, Satellite, Rotate3D } from "lucide-react";
-import { openRing, vertexMoveKeepsRingValid } from "./geometry";
+import { openRing, ringHasSelfIntersections, vertexMoveKeepsRingValid } from "./geometry";
 
 export type MapPolygon = {
   id: string;
@@ -253,7 +253,7 @@ export default function MapLibreMap({
   const onEditPolygonChangeRef = useRef(onEditPolygonChange);
   const onEditDragStartRef = useRef(onEditDragStart);
   const onEditValidationChangeRef = useRef(onEditValidationChange);
-  const activeVertexDragRef = useRef<{ pointerId: number; polygonId: string; vertexIndex: number } | null>(null);
+  const activeVertexDragRef = useRef<{ pointerId: number; polygonId: string; vertexIndex: number; repairInvalidRing: boolean } | null>(null);
   const satelliteModeRef = useRef(initialView === "satellite");
   polygonsRef.current = polygons;
   currentLocationRef.current = currentLocation;
@@ -336,7 +336,12 @@ export default function MapLibreMap({
       const polygon = polygonsRef.current.find((candidate) => candidate.id === polygonId);
       if (!polygon) return;
       onEditDragStartRef.current?.(polygonId, polygon.ring.map((point) => [...point] as [number, number]));
-      activeVertexDragRef.current = { pointerId: event.pointerId, polygonId, vertexIndex };
+      activeVertexDragRef.current = {
+        pointerId: event.pointerId,
+        polygonId,
+        vertexIndex,
+        repairInvalidRing: ringHasSelfIntersections(polygon.ring),
+      };
       event.preventDefault();
       event.stopPropagation();
       canvas.setPointerCapture(event.pointerId);
@@ -349,7 +354,7 @@ export default function MapLibreMap({
       const bounds = canvas.getBoundingClientRect();
       const [lng, lat] = map.unproject([event.clientX - bounds.left, event.clientY - bounds.top]).toArray();
       const sourcePolygon = polygonsRef.current.find((polygon) => polygon.id === drag.polygonId);
-      if (!sourcePolygon || !vertexMoveKeepsRingValid(sourcePolygon.ring, drag.vertexIndex, [lat, lng])) {
+      if (!sourcePolygon || !vertexMoveKeepsRingValid(sourcePolygon.ring, drag.vertexIndex, [lat, lng], drag.repairInvalidRing)) {
         onEditValidationChangeRef.current?.(true);
         return;
       }

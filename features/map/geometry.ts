@@ -42,16 +42,42 @@ function segmentsIntersect(a: LatLng, b: LatLng, c: LatLng, d: LatLng): boolean 
     liesOnSegment(c, d, a) || liesOnSegment(c, d, b);
 }
 
+/** Detect an already self-crossing ring, ignoring edges that share an endpoint. */
+export function ringHasSelfIntersections(ring: LatLng[]): boolean {
+  const points = openRing(ring);
+  const count = points.length;
+  if (count < 3) return true;
+  for (let first = 0; first < count; first++) {
+    const firstNext = (first + 1) % count;
+    for (let second = first + 1; second < count; second++) {
+      const secondNext = (second + 1) % count;
+      if (first === second || firstNext === second || secondNext === first) continue;
+      if (segmentsIntersect(points[first], points[firstNext], points[second], points[secondNext])) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Check just the two edges affected by moving one vertex. This stays O(n),
  * even for GPS walks with thousands of points, and prevents drag edits from
  * introducing a self-crossing fence in the first place.
  */
-export function vertexMoveKeepsRingValid(ring: LatLng[], vertexIndex: number, next: LatLng): boolean {
+export function vertexMoveKeepsRingValid(
+  ring: LatLng[],
+  vertexIndex: number,
+  next: LatLng,
+  allowRepairOfInvalidRing = false,
+): boolean {
   const points = openRing(ring);
   const count = points.length;
   if (count < 3 || !Number.isInteger(vertexIndex) || vertexIndex < 0 || vertexIndex >= count) return false;
   if (!Number.isFinite(next[0]) || !Number.isFinite(next[1])) return false;
+
+  // Some existing farm boundaries were saved with crossings. Do not trap the
+  // user in an uneditable ring: let them reposition handles, then validate the
+  // full outline when saving. For a valid ring, keep preventing new crossings.
+  if (allowRepairOfInvalidRing) return true;
 
   const previous = (vertexIndex - 1 + count) % count;
   const after = (vertexIndex + 1) % count;

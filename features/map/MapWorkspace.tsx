@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { MapPinned, Layers, Eye, EyeOff, LocateFixed, Radio, RadioTower, Box, Pencil, Save, X, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { pointInPolygon } from "@/lib/geo";
+import { ringHasSelfIntersections } from "./geometry";
 import type { MapLocation, MapPolygon } from "./MapLibreMap";
 import { saveFarmBoundaryAction } from "@/app/(app)/map/actions";
 
@@ -51,6 +52,10 @@ export function MapWorkspace({
   });
   const [undoStack, setUndoStack] = useState<{ id: string; ring: [number, number][] }[]>([]);
   const [editError, setEditError] = useState<string | null>(null);
+  const [editingRingNeedsRepair, setEditingRingNeedsRepair] = useState(() => {
+    const polygon = polygons.find((item) => item.id === initialEditableId);
+    return polygon ? ringHasSelfIntersections(polygon.ring) : false;
+  });
   const [editSaved, setEditSaved] = useState(false);
   const [isSaving, startSaving] = useTransition();
   const [location, setLocation] = useState<MapLocation>();
@@ -131,6 +136,7 @@ export function MapWorkspace({
       { ...selectedPolygon, ring: selectedPolygon.ring.map((point) => [...point] as [number, number]) },
     ]);
     setEditableId(selectedPolygon.id);
+    setEditingRingNeedsRepair(ringHasSelfIntersections(selectedPolygon.ring));
     setUndoStack([]);
     setEditError(null);
     setEditSaved(false);
@@ -138,6 +144,7 @@ export function MapWorkspace({
 
   function cancelBoundaryEdit() {
     setEditableId(null);
+    setEditingRingNeedsRepair(false);
     setEditedPolygons([]);
     setUndoStack([]);
     setEditError(null);
@@ -156,6 +163,7 @@ export function MapWorkspace({
           return;
         }
         setEditableId(null);
+        setEditingRingNeedsRepair(false);
         setEditedPolygons([]);
         setUndoStack([]);
         setEditSaved(true);
@@ -220,7 +228,7 @@ export function MapWorkspace({
 
       {editableId && editingPolygon && (
         <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm">Drag the white handles to reshape <span className="font-semibold">{editingPolygon.name}</span>. The editor blocks moves that would make the fence cross itself.</p>
+          <p className="text-sm">Drag the white handles to reshape <span className="font-semibold">{editingPolygon.name}</span>. {editingRingNeedsRepair ? "This saved boundary has crossing points. Drag the handles to repair it; saving will work once the outline is valid." : "Moves that would make the fence cross itself are blocked."}</p>
           <div className="flex shrink-0 gap-2">
             <button type="button" onClick={undoBoundaryMove} disabled={isSaving || undoStack.length === 0} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-medium disabled:opacity-50"><Undo2 className="h-4 w-4" /> Undo move</button>
             <button type="button" onClick={cancelBoundaryEdit} disabled={isSaving} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-medium disabled:opacity-60"><X className="h-4 w-4" /> Cancel</button>
