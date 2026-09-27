@@ -58,6 +58,35 @@ export function ringHasSelfIntersections(ring: LatLng[]): boolean {
   return false;
 }
 
+/** Remove bow-tie crossings by reversing the point run between crossing edges. */
+export function untangleRing(ring: LatLng[]): LatLng[] {
+  let points = openRing(ring);
+  if (points.length < 4) return points;
+  const maxPasses = points.length * 4;
+
+  for (let pass = 0; pass < maxPasses; pass++) {
+    let untangled = false;
+    const count = points.length;
+    for (let first = 0; first < count && !untangled; first++) {
+      const firstNext = (first + 1) % count;
+      for (let second = first + 2; second < count; second++) {
+        const secondNext = (second + 1) % count;
+        if (secondNext === first) continue;
+        if (!segmentsIntersect(points[first], points[firstNext], points[second], points[secondNext])) continue;
+        points = [
+          ...points.slice(0, first + 1),
+          ...points.slice(first + 1, second + 1).reverse(),
+          ...points.slice(second + 1),
+        ];
+        untangled = true;
+        break;
+      }
+    }
+    if (!untangled) break;
+  }
+  return points;
+}
+
 /**
  * Check just the two edges affected by moving one vertex. This stays O(n),
  * even for GPS walks with thousands of points, and prevents drag edits from

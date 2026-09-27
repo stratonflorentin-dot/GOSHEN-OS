@@ -4,10 +4,10 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { MapPinned, Layers, Eye, EyeOff, LocateFixed, Radio, RadioTower, Box, Pencil, Save, X, Undo2 } from "lucide-react";
+import { MapPinned, Layers, Eye, EyeOff, LocateFixed, Radio, RadioTower, Box, Pencil, Save, X, Undo2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { pointInPolygon } from "@/lib/geo";
-import { ringHasSelfIntersections } from "./geometry";
+import { ringHasSelfIntersections, untangleRing } from "./geometry";
 import type { MapLocation, MapPolygon } from "./MapLibreMap";
 import { saveFarmBoundaryAction } from "@/app/(app)/map/actions";
 
@@ -52,6 +52,7 @@ export function MapWorkspace({
   });
   const [undoStack, setUndoStack] = useState<{ id: string; ring: [number, number][] }[]>([]);
   const [editError, setEditError] = useState<string | null>(null);
+  const [editNotice, setEditNotice] = useState<string | null>(null);
   const [editingRingNeedsRepair, setEditingRingNeedsRepair] = useState(() => {
     const polygon = polygons.find((item) => item.id === initialEditableId);
     return polygon ? ringHasSelfIntersections(polygon.ring) : false;
@@ -139,6 +140,7 @@ export function MapWorkspace({
     setEditingRingNeedsRepair(ringHasSelfIntersections(selectedPolygon.ring));
     setUndoStack([]);
     setEditError(null);
+    setEditNotice(null);
     setEditSaved(false);
   }
 
@@ -148,12 +150,28 @@ export function MapWorkspace({
     setEditedPolygons([]);
     setUndoStack([]);
     setEditError(null);
+    setEditNotice(null);
     if (initialEditableId) router.replace("/map", { scroll: false });
+  }
+
+  function untangleBoundary() {
+    if (!editingPolygon) return;
+    const ring = untangleRing(editingPolygon.ring);
+    setUndoStack((current) => [...current.slice(-29), { id: editingPolygon.id, ring: editingPolygon.ring.map((point) => [...point] as [number, number]) }]);
+    setEditedPolygons((current) => [
+      ...current.filter((polygon) => polygon.id !== editingPolygon.id),
+      { ...editingPolygon, ring },
+    ]);
+    const stillInvalid = ringHasSelfIntersections(ring);
+    setEditingRingNeedsRepair(stillInvalid);
+    setEditError(stillInvalid ? "Some crossings remain. Drag the handles to adjust the outline, then try Untangle outline again." : null);
+    setEditNotice(stillInvalid ? null : "Crossings untangled. Review the boundary, then save your change.");
   }
 
   function saveBoundaryEdit() {
     if (!editingPolygon || isSaving) return;
     setEditError(null);
+    setEditNotice(null);
     setEditSaved(false);
     startSaving(async () => {
       try {
@@ -178,6 +196,8 @@ export function MapWorkspace({
   function undoBoundaryMove() {
     const previous = undoStack.at(-1);
     if (!previous) return;
+    setEditingRingNeedsRepair(ringHasSelfIntersections(previous.ring));
+    setEditNotice(null);
     setEditedPolygons((current) => {
       const original = polygons.find((polygon) => polygon.id === previous.id);
       const existing = current.find((polygon) => polygon.id === previous.id) ?? original;
@@ -228,8 +248,9 @@ export function MapWorkspace({
 
       {editableId && editingPolygon && (
         <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm">Drag the white handles to reshape <span className="font-semibold">{editingPolygon.name}</span>. {editingRingNeedsRepair ? "This saved boundary has crossing points. Drag the handles to repair it; saving will work once the outline is valid." : "Moves that would make the fence cross itself are blocked."}</p>
-          <div className="flex shrink-0 gap-2">
+          <p className="text-sm">Drag the white handles to reshape <span className="font-semibold">{editingPolygon.name}</span>. {editingRingNeedsRepair ? "This saved boundary has crossings. Use Untangle outline to fix the point order, then review and save." : "Moves that would make the fence cross itself are blocked."}</p>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {editingRingNeedsRepair && <button type="button" onClick={untangleBoundary} disabled={isSaving} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-primary/30 bg-card px-3 text-sm font-medium text-primary hover:bg-primary/5 disabled:opacity-50"><Sparkles className="h-4 w-4" /> Untangle outline</button>}
             <button type="button" onClick={undoBoundaryMove} disabled={isSaving || undoStack.length === 0} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-medium disabled:opacity-50"><Undo2 className="h-4 w-4" /> Undo move</button>
             <button type="button" onClick={cancelBoundaryEdit} disabled={isSaving} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-sm font-medium disabled:opacity-60"><X className="h-4 w-4" /> Cancel</button>
             <button type="button" onClick={saveBoundaryEdit} disabled={isSaving} className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-white disabled:opacity-60"><Save className="h-4 w-4" /> {isSaving ? "Saving…" : "Save fence"}</button>
@@ -237,6 +258,7 @@ export function MapWorkspace({
         </div>
       )}
       {editError && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{editError}</p>}
+      {editNotice && <p role="status" className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-primary">{editNotice}</p>}
       {editSaved && <p role="status" className="text-sm text-primary">Farm boundary saved.</p>}
 
       {(tracking || gpsError || transition) && (
@@ -308,6 +330,7 @@ export function MapWorkspace({
                 })}
                 onEditDragStart={(id, ring) => setUndoStack((current) => [...current.slice(-29), { id, ring }])}
                 onEditValidationChange={(crossesBoundary) => {
+                  setEditNotice(null);
                   setEditError(crossesBoundary
                     ? "That move would make the fence cross itself. Move the handle along the existing outline."
                     : null);

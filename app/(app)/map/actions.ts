@@ -47,7 +47,7 @@ export async function saveFarmBoundaryAction(input: {
     await updateFarmBoundary(user.id, memberships[0].organization.id, input.farmId, boundaryGeoJson);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("BOUNDARY_INVALID:")) {
-      return { error: "This fence crosses itself. Undo the last point move, or cancel editing to restore the saved boundary, then try again." };
+      return { error: "The edited fence still has a self-crossing section. Use Untangle outline, review the result, then save again." };
     }
     if (error instanceof Error && error.message === "BOUNDARY_NOT_ALLOWED") {
       return { error: "You do not have permission to update this farm." };
