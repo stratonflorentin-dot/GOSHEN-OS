@@ -4,16 +4,20 @@
 
 :root {
   color-scheme: light;
-  --background: 60 9% 97%;
+  --background: 130 18% 96%;
   --foreground: 150 13% 14%;
-  --card: 0 0% 100%;
+  --card: 120 22% 98%;
   --card-foreground: 150 13% 14%;
-  --border: 135 10% 87%;
-  --muted: 120 8% 94%;
+  --border: 135 13% 86%;
+  --muted: 130 16% 92%;
   --muted-foreground: 145 6% 43%;
-  --sidebar: 0 0% 100%;
+  --sidebar: 130 20% 96%;
   --brand: 151 48% 25%;
 }
+
+/* Keep legacy white utility surfaces in step with the softly tinted light theme. */
+:root .bg-white { background-color: hsl(var(--card)); }
+:root [class*="bg-white/"] { background-color: hsl(var(--card) / 0.96); }
 
 html.dark {
   color-scheme: dark;
