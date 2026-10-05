@@ -1,7 +1,6 @@
 import { Construction } from "lucide-react";
 
 const TITLES: Record<string, { title: string; phase: number }> = {
-  reports: { title: "Reports", phase: 11 },
   team: { title: "Team", phase: 12 },
   settings: { title: "Settings", phase: 12 },
 };

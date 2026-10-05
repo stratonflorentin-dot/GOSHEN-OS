@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   BarChart3, Beef, Bot, Boxes, ChevronLeft, Cloud, Egg,
-  Command, Home, Leaf, LogOut, Map, Menu, Plus, Search,
+  Command, FileText, Home, Leaf, LogOut, Map, Menu, Plus, Search,
   Sprout, Wallet, X, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,6 +31,7 @@ const GROUPS: { label: string; items: Item[] }[] = [
     { href: "/weather", label: "Weather", icon: Cloud },
     { href: "/analytics", label: "Analytics", icon: BarChart3 },
     { href: "/assistant", label: "AI Assistant", icon: Bot },
+    { href: "/reports", label: "Reports", icon: FileText },
   ] },
 ];
 const SEARCH_ITEMS = GROUPS.flatMap((group) => group.items);
