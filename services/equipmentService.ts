@@ -354,34 +354,34 @@ export async function getEquipmentSummary(
   upcomingService: number;
 }> {
   return withUser(userId, async (db) => {
-    const [fleet, usage, maint, upcoming] = await Promise.all([
-      db`
-        select
-          count(*)::int                                                        as fleet_count,
-          count(*) filter (where status = 'operational')::int                   as operational,
-          count(*) filter (where status = 'maintenance')::int                   as in_maintenance,
-          count(*) filter (where status = 'breakdown')::int                     as breakdown
-        from public.equipment where organization_id = ${organizationId}
-      `,
-      db`
-        select
-          coalesce(sum(total_cost), 0)::numeric as usage_cost,
-          coalesce(sum(fuel_cost), 0)::numeric  as fuel_cost,
-          coalesce(sum(hours_used), 0)::numeric as total_hours
-        from public.equipment_usage where organization_id = ${organizationId}
-      `,
-      db`
-        select coalesce(sum(total_cost), 0)::numeric as maintenance_cost
-        from public.maintenance_records where organization_id = ${organizationId}
-      `,
-      db`
-        select count(*)::int as n
-        from public.maintenance_records
-        where organization_id = ${organizationId}
-          and next_service_date is not null
-          and next_service_date <= current_date + interval '30 days'
-      `,
-    ]);
+    // Sequential on purpose: parallel tagged queries inside a postgres.js
+    // transaction can deadlock the client (observed against pooled Neon).
+    const fleet = await db`
+      select
+        count(*)::int                                                        as fleet_count,
+        count(*) filter (where status = 'operational')::int                   as operational,
+        count(*) filter (where status = 'maintenance')::int                   as in_maintenance,
+        count(*) filter (where status = 'breakdown')::int                     as breakdown
+      from public.equipment where organization_id = ${organizationId}
+    `;
+    const usage = await db`
+      select
+        coalesce(sum(total_cost), 0)::numeric as usage_cost,
+        coalesce(sum(fuel_cost), 0)::numeric  as fuel_cost,
+        coalesce(sum(hours_used), 0)::numeric as total_hours
+      from public.equipment_usage where organization_id = ${organizationId}
+    `;
+    const maint = await db`
+      select coalesce(sum(total_cost), 0)::numeric as maintenance_cost
+      from public.maintenance_records where organization_id = ${organizationId}
+    `;
+    const upcoming = await db`
+      select count(*)::int as n
+      from public.maintenance_records
+      where organization_id = ${organizationId}
+        and next_service_date is not null
+        and next_service_date <= current_date + interval '30 days'
+    `;
     const f = fleet[0] ?? {};
     const u = usage[0] ?? {};
     return {

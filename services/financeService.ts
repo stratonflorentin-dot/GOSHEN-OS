@@ -953,37 +953,37 @@ export async function getFinancialSummary(userId: string, organizationId: string
   accountsPayable: number;
 }> {
   return withUser(userId, async (db) => {
-    const [expenses, revenues, payments, ar, ap] = await Promise.all([
-      db`
-        select sum(amount)::numeric as total 
-        from public.expenses 
-        where organization_id = ${organizationId}
-          and (${fromDate}::date is null or expense_date >= ${fromDate}::date)
-          and (${toDate}::date is null or expense_date <= ${toDate}::date)
-      `,
-      db`
-        select sum(amount)::numeric as total 
-        from public.revenues 
-        where organization_id = ${organizationId}
-          and (${fromDate}::date is null or revenue_date >= ${fromDate}::date)
-          and (${toDate}::date is null or revenue_date <= ${toDate}::date)
-      `,
-      db`
-        select sum(case when payment_type = 'receipt' then amount else -amount end)::numeric as total 
-        from public.payments 
-        where organization_id = ${organizationId} and status = 'cleared'
-      `,
-      db`
-        select sum(amount)::numeric as total 
-        from public.revenues 
-        where organization_id = ${organizationId} and payment_status != 'paid'
-      `,
-      db`
-        select sum(amount)::numeric as total 
-        from public.expenses 
-        where organization_id = ${organizationId} and payment_status != 'paid'
-      `,
-    ]);
+    // Sequential on purpose: parallel tagged queries inside a postgres.js
+    // transaction can deadlock the client (observed against pooled Neon).
+    const expenses = await db`
+      select sum(amount)::numeric as total
+      from public.expenses
+      where organization_id = ${organizationId}
+        and (${fromDate ?? null}::date is null or expense_date >= ${fromDate ?? null}::date)
+        and (${toDate ?? null}::date is null or expense_date <= ${toDate ?? null}::date)
+    `;
+    const revenues = await db`
+      select sum(amount)::numeric as total
+      from public.revenues
+      where organization_id = ${organizationId}
+        and (${fromDate ?? null}::date is null or revenue_date >= ${fromDate ?? null}::date)
+        and (${toDate ?? null}::date is null or revenue_date <= ${toDate ?? null}::date)
+    `;
+    const payments = await db`
+      select sum(case when payment_type = 'receipt' then amount else -amount end)::numeric as total
+      from public.payments
+      where organization_id = ${organizationId} and status = 'cleared'
+    `;
+    const ar = await db`
+      select sum(amount)::numeric as total
+      from public.revenues
+      where organization_id = ${organizationId} and payment_status != 'paid'
+    `;
+    const ap = await db`
+      select sum(amount)::numeric as total
+      from public.expenses
+      where organization_id = ${organizationId} and payment_status != 'paid'
+    `;
 
     const totalRevenue = Number(revenues[0]?.total ?? 0);
     const totalExpenses = Number(expenses[0]?.total ?? 0);

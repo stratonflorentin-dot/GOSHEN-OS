@@ -123,27 +123,20 @@ export async function getFarmKpis(
     const fromDate = from ?? new Date(Date.now() - 365 * 86400_000).toISOString().slice(0, 10);
     const toDate = to ?? new Date().toISOString().slice(0, 10);
 
-    const [
-      land,
-      crops,
-      livestock,
-      finance,
-      inventory,
-      labor,
-      equipment,
-    ] = await Promise.all([
-      // Land
-      db`
-        select
-          coalesce(sum(area_m2), 0)::numeric / 10000 as total_hectares,
-          count(*) filter (where status = 'active')::int as active_plots
-        from public.plots
-        where farm_id = ${farmId} and status <> 'archived'
-      `,
-      // Crops
-      db`
-        select
-          count(*) filter (where cs.status in ('planted','growing'))::int as active_crop_seasons,
+    // Sequential on purpose: parallel tagged queries inside a postgres.js
+    // transaction can deadlock the client (observed against pooled Neon).
+    // Land
+    const land = await db`
+      select
+        coalesce(sum(area_m2), 0)::numeric / 10000 as total_hectares,
+        count(*) filter (where status = 'active')::int as active_plots
+      from public.plots
+      where farm_id = ${farmId} and status <> 'archived'
+    `;
+    // Crops
+    const crops = await db`
+      select
+        count(*) filter (where cs.status in ('planted','growing'))::int as active_crop_seasons,
           coalesce(sum(cs.area_m2), 0)::numeric / 10000 as total_planted_hectares,
           coalesce(sum(h.quantity), 0)::numeric as total_harvested_kg,
           coalesce(sum(h.total_value), 0)::numeric as total_crop_revenue,
@@ -174,10 +167,10 @@ export async function getFarmKpis(
         where cs.farm_id = ${farmId}
           and (${fromDate}::date is null or cs.created_at >= ${fromDate}::date)
           and (${toDate}::date is null or cs.created_at <= ${toDate}::date)
-      `,
-      // Livestock
-      db`
-        select
+    `;
+    // Livestock
+    const livestock = await db`
+      select
           count(*) filter (where lb.status = 'active')::int as active_batches,
           coalesce(sum(ls.total_revenue), 0)::numeric as total_livestock_revenue,
           coalesce(sum(coalesce(lb.source_cost, 0) + coalesce(lf.total_cost, 0) + coalesce(lh.total_cost, 0) + coalesce(lr.total_cost, 0)), 0)::numeric as total_livestock_cost
@@ -201,10 +194,10 @@ export async function getFarmKpis(
         where lb.farm_id = ${farmId}
           and (${fromDate}::date is null or lb.created_at >= ${fromDate}::date)
           and (${toDate}::date is null or lb.created_at <= ${toDate}::date)
-      `,
-      // Finance
-      db`
-        select
+    `;
+    // Finance
+    const finance = await db`
+      select
           coalesce(sum(jl.credit - jl.debit) filter (where a.account_type = 'revenue'), 0)::numeric as total_revenue,
           coalesce(sum(jl.debit - jl.credit) filter (where a.account_type in ('expense', 'cost_of_goods_sold')), 0)::numeric as total_expenses,
           coalesce(sum(jl.credit - jl.debit) filter (where a.account_type = 'revenue'), 0)::numeric -
@@ -216,38 +209,37 @@ export async function getFarmKpis(
           and je.status = 'posted'
           and (${fromDate}::date is null or je.entry_date >= ${fromDate}::date)
           and (${toDate}::date is null or je.entry_date <= ${toDate}::date)
-      `,
-      // Inventory value + low stock
-      db`
-        select
+    `;
+    // Inventory value + low stock
+    const inventory = await db`
+      select
           coalesce(sum(b.quantity * coalesce(b.avg_unit_cost, 0)), 0)::numeric as inventory_value,
           count(*) filter (where b.quantity <= coalesce(i.reorder_point, i.min_stock_level, 0) and coalesce(i.reorder_point, i.min_stock_level, 0) > 0)::int as low_stock_items
         from public.inventory_balances b
         join public.inventory_items i on i.id = b.item_id
         join public.inventory_locations il on il.id = b.location_id
         where il.farm_id = ${farmId} and b.quantity > 0
-      `,
-      // Labor
-      db`
-        select
+    `;
+    // Labor
+    const labor = await db`
+      select
           coalesce(sum(total_cost), 0)::numeric as total_labor_cost,
           coalesce(sum(hours_worked), 0)::numeric as total_labor_hours
         from public.labor_records
         where farm_id = ${farmId}
           and (${fromDate}::date is null or work_date >= ${fromDate}::date)
           and (${toDate}::date is null or work_date <= ${toDate}::date)
-      `,
-      // Equipment
-      db`
-        select
-          coalesce(sum(hours_used), 0)::numeric as equipment_usage_hours,
-          coalesce(sum(total_cost), 0)::numeric as equipment_cost
-        from public.equipment_usage
-        where farm_id = ${farmId}
-          and (${fromDate}::date is null or usage_date >= ${fromDate}::date)
-          and (${toDate}::date is null or usage_date <= ${toDate}::date)
-      `,
-    ]);
+    `;
+    // Equipment
+    const equipment = await db`
+      select
+        coalesce(sum(hours_used), 0)::numeric as equipment_usage_hours,
+        coalesce(sum(total_cost), 0)::numeric as equipment_cost
+      from public.equipment_usage
+      where farm_id = ${farmId}
+        and (${fromDate}::date is null or usage_date >= ${fromDate}::date)
+        and (${toDate}::date is null or usage_date <= ${toDate}::date)
+    `;
 
     const l = land[0] ?? {};
     const c = crops[0] ?? {};

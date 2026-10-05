@@ -301,21 +301,21 @@ export async function getIrrigationSummary(
   zoneCount: number;
 }> {
   return withUser(userId, async (db) => {
-    const [agg, sources, zones] = await Promise.all([
-      db`
-        select
-          count(*)::int                                              as event_count,
-          coalesce(sum(total_cost), 0)::numeric                       as total_cost,
-          coalesce(sum(water_volume_m3), 0)::numeric                  as total_water,
-          coalesce(sum(duration_minutes), 0)::int                     as total_minutes
-        from public.irrigation_records
-        where organization_id = ${organizationId}
-          and (${from ?? null}::date is null or irrigation_date >= ${from ?? null}::date)
-          and (${to ?? null}::date is null or irrigation_date <= ${to ?? null}::date)
-      `,
-      db`select count(*)::int as n from public.water_sources where organization_id = ${organizationId} and is_active = true`,
-      db`select count(*)::int as n from public.irrigation_zones where organization_id = ${organizationId} and status = 'active'`,
-    ]);
+    // Sequential on purpose: parallel tagged queries inside a postgres.js
+    // transaction can deadlock the client (observed against pooled Neon).
+    const agg = await db`
+      select
+        count(*)::int                                              as event_count,
+        coalesce(sum(total_cost), 0)::numeric                       as total_cost,
+        coalesce(sum(water_volume_m3), 0)::numeric                  as total_water,
+        coalesce(sum(duration_minutes), 0)::int                     as total_minutes
+      from public.irrigation_records
+      where organization_id = ${organizationId}
+        and (${from ?? null}::date is null or irrigation_date >= ${from ?? null}::date)
+        and (${to ?? null}::date is null or irrigation_date <= ${to ?? null}::date)
+    `;
+    const sources = await db`select count(*)::int as n from public.water_sources where organization_id = ${organizationId} and is_active = true`;
+    const zones = await db`select count(*)::int as n from public.irrigation_zones where organization_id = ${organizationId} and status = 'active'`;
     const a = agg[0] ?? {};
     return {
       eventCount: Number(a.event_count ?? 0),

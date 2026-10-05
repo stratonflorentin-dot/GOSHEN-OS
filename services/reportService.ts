@@ -5,6 +5,7 @@
  */
 
 import { withUser } from "@/lib/db";
+import { reportToCsv, type ReportCell } from "@/lib/reports/csv";
 import { listFarmGeo } from "@/services/farmService";
 import { listPlots } from "@/services/plotService";
 import { listCropSeasons } from "@/services/cropService";
@@ -18,7 +19,7 @@ import {
   getLivestockBatchPerformance,
 } from "@/services/analyticsService";
 
-export type ReportCell = string | number | null;
+export type { ReportCell } from "@/lib/reports/csv";
 export type ReportTable = { title: string; columns: string[]; rows: ReportCell[][] };
 export type ReportType =
   | "farm"
@@ -470,23 +471,4 @@ export async function generateReport(
   }
 }
 
-function csvEscape(value: ReportCell): string {
-  if (value === null || value === undefined) return "";
-  const s = String(value);
-  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
-
-export function reportToCsv(report: GeneratedReport): string {
-  const lines: string[] = [];
-  lines.push(csvEscape(report.title));
-  lines.push(csvEscape(`Generated: ${report.generatedAt}`));
-  lines.push("");
-  for (const table of report.tables) {
-    lines.push(csvEscape(table.title));
-    lines.push(table.columns.map(csvEscape).join(","));
-    for (const row of table.rows) lines.push(row.map(csvEscape).join(","));
-    lines.push("");
-  }
-  return lines.join("\r\n");
-}
+export { reportToCsv };

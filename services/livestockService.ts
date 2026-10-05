@@ -543,12 +543,12 @@ export async function getBatchFinancials(userId: string, batchId: string): Promi
   fcr: number | null; // Feed Conversion Ratio
 }> {
   return withUser(userId, async (db) => {
-    const [feed, events, sales, batch] = await Promise.all([
-      db`select sum(total_cost)::numeric as total from public.livestock_feed where batch_id = ${batchId}`,
-      db`select event_type, sum(cost)::numeric as total from public.livestock_events where batch_id = ${batchId} group by event_type`,
-      db`select sum(total_revenue)::numeric as total from public.livestock_sales where batch_id = ${batchId}`,
-      db`select initial_quantity, current_quantity, mortality_count, source_cost from public.livestock_batches where id = ${batchId}`,
-    ]);
+    // Sequential on purpose: parallel tagged queries inside a postgres.js
+    // transaction can deadlock the client (observed against pooled Neon).
+    const feed = await db`select sum(total_cost)::numeric as total from public.livestock_feed where batch_id = ${batchId}`;
+    const events = await db`select event_type, sum(cost)::numeric as total from public.livestock_events where batch_id = ${batchId} group by event_type`;
+    const sales = await db`select sum(total_revenue)::numeric as total from public.livestock_sales where batch_id = ${batchId}`;
+    const batch = await db`select initial_quantity, current_quantity, mortality_count, source_cost from public.livestock_batches where id = ${batchId}`;
     const b = batch[0];
 
     const feedCost = Number(feed[0]?.total ?? 0);

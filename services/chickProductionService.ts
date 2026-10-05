@@ -11,33 +11,33 @@ export type ChickBatchFilters = { farmId?: string; seasonId?: string; sourceType
 
 export async function getChickProductionOverview(userId: string, organizationId: string, filters: ChickBatchFilters = {}): Promise<ChickProductionOverview> {
   return withUser(userId, async (db) => {
-    const [incubators, orders, batches, events, costs, poultryBatches] = await Promise.all([
-      db`select i.id, f.name as farm_name, i.name, i.capacity, i.status, i.location, i.manufacturer, i.model, i.monitors_temperature, i.monitors_humidity from public.incubators i join public.farms f on f.id=i.farm_id where i.organization_id=${organizationId} order by f.name, i.name`,
-      db`select ho.id, f.name as farm_name, ho.supplier_name, ho.batch_reference as reference, ho.order_number, ho.vaccination_info, ho.document_urls,
-        ho.quantity_ordered, ho.quantity_delivered, ho.dead_on_arrival, ho.price_per_chick, ho.transport_cost, ho.other_cost, ho.delivery_date, ho.breed,
-        (ho.quantity_delivered - ho.dead_on_arrival - (select coalesce(sum(lb.initial_quantity),0)::int from public.livestock_batches lb where lb.source_type='external_hatchery' and lb.source_id=ho.id)) as available
-        from public.hatchery_orders ho join public.farms f on f.id=ho.farm_id where ho.organization_id=${organizationId} order by ho.order_date desc, ho.created_at desc`,
-      db`select ib.id, f.name as farm_name, i.name as incubator_name, ib.batch_code, ib.start_date, ib.expected_hatch_date, ib.actual_hatch_date, ib.egg_source, ib.egg_source_details, ib.document_urls, ib.eggs_loaded, ib.fertile_eggs, ib.infertile_eggs, ib.cracked_or_damaged, ib.embryonic_losses, ib.hatched, ib.healthy_chicks, ib.weak_chicks, ib.dead_at_hatch, ib.egg_cost, ib.operating_cost, ib.breed, ib.strain,
-        (ib.healthy_chicks::numeric / nullif(ib.eggs_loaded,0) * 100) as hatch_rate,
-        (ib.egg_cost + ib.operating_cost + (select coalesce(sum(ic.amount),0) from public.incubation_costs ic where ic.incubation_batch_id=ib.id)) as total_cost
-        from public.incubation_batches ib join public.farms f on f.id=ib.farm_id join public.incubators i on i.id=ib.incubator_id
-        where ib.organization_id=${organizationId} order by ib.start_date desc, ib.created_at desc`,
-      db`select e.incubation_batch_id, e.event_type, e.event_at, e.temperature_c, e.humidity_percent, e.quantity, e.notes from public.incubation_events e where e.organization_id=${organizationId} order by e.event_at desc`,
-      db`select c.incubation_batch_id, c.category, c.amount, c.incurred_on from public.incubation_costs c where c.organization_id=${organizationId} order by c.incurred_on desc`,
-      db`select lb.id, f.name as farm_name, s.name as season_name, lb.batch_code, lb.start_date, lb.source_type, lb.source_details, lb.initial_quantity, lb.breed, lb.strain, coalesce(lb.source_cost,0)::numeric as source_cost,
-        (coalesce(lb.source_cost,0) / nullif(lb.initial_quantity,0))::numeric as cost_per_bird
-        from public.livestock_batches lb join public.farms f on f.id=lb.farm_id join public.livestock_groups lg on lg.id=lb.group_id join public.livestock_species ls on ls.id=lg.species_id left join public.seasons s on s.id=lb.season_id
-        where lb.organization_id=${organizationId} and ls.category='poultry'
-          and (${filters.farmId ?? null}::uuid is null or lb.farm_id=${filters.farmId ?? null}::uuid)
-          and (${filters.seasonId ?? null}::uuid is null or lb.season_id=${filters.seasonId ?? null}::uuid)
-          and (${filters.sourceType == null || filters.sourceType === "all" || filters.sourceType === "legacy_unrecorded"} or lb.source_type=${filters.sourceType ?? "all"})
-          and (${filters.sourceType !== "legacy_unrecorded"} or lb.source_type is null)
-          and (${filters.breed ? `%${filters.breed}%` : null}::text is null or lb.breed ilike ${filters.breed ? `%${filters.breed}%` : null}::text or lb.strain ilike ${filters.breed ? `%${filters.breed}%` : null}::text)
-          and (${filters.batch ? `%${filters.batch}%` : null}::text is null or lb.batch_code ilike ${filters.batch ? `%${filters.batch}%` : null}::text)
-          and (${filters.dateFrom ?? null}::date is null or lb.start_date>=${filters.dateFrom ?? null}::date)
-          and (${filters.dateTo ?? null}::date is null or lb.start_date<=${filters.dateTo ?? null}::date)
-        order by lb.start_date desc, lb.created_at desc`,
-    ]);
+    // Sequential on purpose: parallel tagged queries inside a postgres.js
+    // transaction can deadlock the client (observed against pooled Neon).
+    const incubators = await db`select i.id, f.name as farm_name, i.name, i.capacity, i.status, i.location, i.manufacturer, i.model, i.monitors_temperature, i.monitors_humidity from public.incubators i join public.farms f on f.id=i.farm_id where i.organization_id=${organizationId} order by f.name, i.name`;
+    const orders = await db`select ho.id, f.name as farm_name, ho.supplier_name, ho.batch_reference as reference, ho.order_number, ho.vaccination_info, ho.document_urls,
+      ho.quantity_ordered, ho.quantity_delivered, ho.dead_on_arrival, ho.price_per_chick, ho.transport_cost, ho.other_cost, ho.delivery_date, ho.breed,
+      (ho.quantity_delivered - ho.dead_on_arrival - (select coalesce(sum(lb.initial_quantity),0)::int from public.livestock_batches lb where lb.source_type='external_hatchery' and lb.source_id=ho.id)) as available
+      from public.hatchery_orders ho join public.farms f on f.id=ho.farm_id where ho.organization_id=${organizationId} order by ho.order_date desc, ho.created_at desc`;
+    const batches = await db`select ib.id, f.name as farm_name, i.name as incubator_name, ib.batch_code, ib.start_date, ib.expected_hatch_date, ib.actual_hatch_date, ib.egg_source, ib.egg_source_details, ib.document_urls, ib.eggs_loaded, ib.fertile_eggs, ib.infertile_eggs, ib.cracked_or_damaged, ib.embryonic_losses, ib.hatched, ib.healthy_chicks, ib.weak_chicks, ib.dead_at_hatch, ib.egg_cost, ib.operating_cost, ib.breed, ib.strain,
+      (ib.healthy_chicks::numeric / nullif(ib.eggs_loaded,0) * 100) as hatch_rate,
+      (ib.egg_cost + ib.operating_cost + (select coalesce(sum(ic.amount),0) from public.incubation_costs ic where ic.incubation_batch_id=ib.id)) as total_cost
+      from public.incubation_batches ib join public.farms f on f.id=ib.farm_id join public.incubators i on i.id=ib.incubator_id
+      where ib.organization_id=${organizationId} order by ib.start_date desc, ib.created_at desc`;
+    const events = await db`select e.incubation_batch_id, e.event_type, e.event_at, e.temperature_c, e.humidity_percent, e.quantity, e.notes from public.incubation_events e where e.organization_id=${organizationId} order by e.event_at desc`;
+    const costs = await db`select c.incubation_batch_id, c.category, c.amount, c.incurred_on from public.incubation_costs c where c.organization_id=${organizationId} order by c.incurred_on desc`;
+    const poultryBatches = await db`select lb.id, f.name as farm_name, s.name as season_name, lb.batch_code, lb.start_date, lb.source_type, lb.source_details, lb.initial_quantity, lb.breed, lb.strain, coalesce(lb.source_cost,0)::numeric as source_cost,
+      (coalesce(lb.source_cost,0) / nullif(lb.initial_quantity,0))::numeric as cost_per_bird
+      from public.livestock_batches lb join public.farms f on f.id=lb.farm_id join public.livestock_groups lg on lg.id=lb.group_id join public.livestock_species ls on ls.id=lg.species_id left join public.seasons s on s.id=lb.season_id
+      where lb.organization_id=${organizationId} and ls.category='poultry'
+        and (${filters.farmId ?? null}::uuid is null or lb.farm_id=${filters.farmId ?? null}::uuid)
+        and (${filters.seasonId ?? null}::uuid is null or lb.season_id=${filters.seasonId ?? null}::uuid)
+        and (${filters.sourceType == null || filters.sourceType === "all" || filters.sourceType === "legacy_unrecorded"} or lb.source_type=${filters.sourceType ?? "all"})
+        and (${filters.sourceType !== "legacy_unrecorded"} or lb.source_type is null)
+        and (${filters.breed ? `%${filters.breed}%` : null}::text is null or lb.breed ilike ${filters.breed ? `%${filters.breed}%` : null}::text or lb.strain ilike ${filters.breed ? `%${filters.breed}%` : null}::text)
+        and (${filters.batch ? `%${filters.batch}%` : null}::text is null or lb.batch_code ilike ${filters.batch ? `%${filters.batch}%` : null}::text)
+        and (${filters.dateFrom ?? null}::date is null or lb.start_date>=${filters.dateFrom ?? null}::date)
+        and (${filters.dateTo ?? null}::date is null or lb.start_date<=${filters.dateTo ?? null}::date)
+      order by lb.start_date desc, lb.created_at desc`;
     return {
       incubators: incubators.map((r) => ({ id: String(r.id), farmName: String(r.farm_name), name: String(r.name), capacity: Number(r.capacity), status: String(r.status), location:(r.location as string | null)??null, manufacturer:(r.manufacturer as string | null)??null, model:(r.model as string | null)??null, monitorsTemperature:Boolean(r.monitors_temperature), monitorsHumidity:Boolean(r.monitors_humidity) })),
       hatcheryOrders: orders.map((r) => {

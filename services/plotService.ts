@@ -275,16 +275,16 @@ export async function getPlotEconomics(userId: string, plotId: string): Promise<
   areaM2: number | null;
 }> {
   return withUser(userId, async (db) => {
-    const [labor, equip, irrigation, harvest, plot] = await Promise.all([
-      db`select coalesce(sum(total_cost), 0)::numeric as total from public.labor_records where plot_id = ${plotId}`,
-      db`select coalesce(sum(total_cost), 0)::numeric as total from public.equipment_usage where plot_id = ${plotId}`,
-      db`select coalesce(sum(total_cost), 0)::numeric as total from public.irrigation_records where plot_id = ${plotId}`,
-      db`select coalesce(sum(h.quantity), 0)::numeric as total
-         from public.harvests h
-         join public.crop_seasons cs on cs.id = h.crop_season_id
-         where cs.plot_id = ${plotId}`,
-      db`select area_m2 from public.plots where id = ${plotId}`,
-    ]);
+    // Sequential on purpose: parallel tagged queries inside a postgres.js
+    // transaction can deadlock the client (observed against pooled Neon).
+    const labor = await db`select coalesce(sum(total_cost), 0)::numeric as total from public.labor_records where plot_id = ${plotId}`;
+    const equip = await db`select coalesce(sum(total_cost), 0)::numeric as total from public.equipment_usage where plot_id = ${plotId}`;
+    const irrigation = await db`select coalesce(sum(total_cost), 0)::numeric as total from public.irrigation_records where plot_id = ${plotId}`;
+    const harvest = await db`select coalesce(sum(h.quantity), 0)::numeric as total
+       from public.harvests h
+       join public.crop_seasons cs on cs.id = h.crop_season_id
+       where cs.plot_id = ${plotId}`;
+    const plot = await db`select area_m2 from public.plots where id = ${plotId}`;
     return {
       laborCost: Number(labor[0]?.total ?? 0),
       equipmentCost: Number(equip[0]?.total ?? 0),
