@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { Calculator, ArrowLeft, Plus, Minus, X } from "lucide-react";
 import { getSessionUser } from "@/lib/auth/server";
 import { listMemberships } from "@/services/orgService";
-import { listAccounts } from "@/services/financeService";
+import { listAccounts, ensureDefaultAccounts } from "@/services/financeService";
 import { createJournalEntryAction } from "./actions";
 
 export default async function NewJournalEntryPage({
@@ -18,6 +18,7 @@ export default async function NewJournalEntryPage({
 
   const org = memberships[0].organization;
   const { error } = await searchParams;
+  await ensureDefaultAccounts(user.id, org.id);
   const accounts = await listAccounts(user.id, org.id);
 
   const assetAccounts = accounts.filter((a) => a.accountType === "asset");

@@ -486,6 +486,82 @@ function toOwnerEquity(row: Record<string, unknown>): OwnerEquity {
 }
 
 // Accounts
+/**
+ * Standard starter chart of accounts for a new organization. Idempotent:
+ * only inserts accounts whose (code) is missing. Covers the core farm
+ * money flows so expense/revenue/payment forms work out of the box (§18, §19).
+ */
+const DEFAULT_ACCOUNTS: Array<{ code: string; name: string; accountType: string }> = [
+  { code: "1000", name: "Cash", accountType: "asset" },
+  { code: "1010", name: "Bank Account", accountType: "asset" },
+  { code: "1020", name: "Mobile Money", accountType: "asset" },
+  { code: "1100", name: "Accounts Receivable", accountType: "asset" },
+  { code: "1200", name: "Inventory", accountType: "asset" },
+  { code: "1500", name: "Equipment & Machinery", accountType: "asset" },
+  { code: "2000", name: "Accounts Payable", accountType: "liability" },
+  { code: "2100", name: "Loans Payable", accountType: "liability" },
+  { code: "3000", name: "Owner's Equity", accountType: "equity" },
+  { code: "3100", name: "Retained Earnings", accountType: "equity" },
+  { code: "4000", name: "Crop Sales", accountType: "revenue" },
+  { code: "4010", name: "Livestock Sales", accountType: "revenue" },
+  { code: "4020", name: "Other Farm Income", accountType: "revenue" },
+  { code: "5000", name: "Wages & Labor", accountType: "expense" },
+  { code: "5010", name: "Seeds & Plants", accountType: "expense" },
+  { code: "5020", name: "Fertilizer & Chemicals", accountType: "expense" },
+  { code: "5030", name: "Animal Feed", accountType: "expense" },
+  { code: "5040", name: "Fuel & Energy", accountType: "expense" },
+  { code: "5050", name: "Maintenance & Repairs", accountType: "expense" },
+  { code: "5060", name: "Transport & Delivery", accountType: "expense" },
+  { code: "5070", name: "Utilities & Water", accountType: "expense" },
+  { code: "5099", name: "Other Expenses", accountType: "expense" },
+];
+
+export async function ensureDefaultAccounts(userId: string, organizationId: string): Promise<void> {
+  return withUser(userId, async (db) => {
+    await db`
+      insert into public.accounts (organization_id, code, name, account_type, currency)
+      select ${organizationId}, a.code, a.name, a.account_type, 'TZS'
+      from unnest(
+        ${DEFAULT_ACCOUNTS.map((a) => a.code)}::text[],
+        ${DEFAULT_ACCOUNTS.map((a) => a.name)}::text[],
+        ${DEFAULT_ACCOUNTS.map((a) => a.accountType)}::text[]
+      ) as a(code, name, account_type)
+      where not exists (
+        select 1 from public.accounts existing
+        where existing.organization_id = ${organizationId} and existing.code = a.code
+      )
+    `;
+  });
+}
+
+/** Generates the next sequential document number, e.g. EXP-0007. */
+export async function nextDocumentNumber(
+  userId: string,
+  organizationId: string,
+  table: "expenses" | "revenues" | "payments" | "journal_entries" | "assets" | "loans",
+  prefix: string,
+): Promise<string> {
+  return withUser(userId, async (db) => {
+    // Table identifier must come from a fixed internal call site, never user input.
+    const allowed: Record<string, string> = {
+      expenses: "expenses",
+      revenues: "revenues",
+      payments: "payments",
+      journal_entries: "journal_entries",
+      assets: "assets",
+      loans: "loans",
+    };
+    const table_ = allowed[table];
+    if (!table_) throw new Error("Unsupported document table");
+    const rows = await db`
+      select count(*)::int as n from public.${db(table_)}
+      where organization_id = ${organizationId}
+    `;
+    const next = Number(rows[0].n) + 1;
+    return `${prefix}-${String(next).padStart(4, "0")}`;
+  });
+}
+
 export async function createAccount(userId: string, input: CreateAccountInput): Promise<Account> {
   return withUser(userId, async (db) => {
     const rows = await db`
@@ -525,6 +601,29 @@ export async function getAccount(userId: string, accountId: string): Promise<Acc
 }
 
 // Journal Entries
+/** Per-entry debit/credit totals for journal listing tables. */
+export async function listJournalLineTotals(
+  userId: string,
+  organizationId: string,
+): Promise<Array<{ entryId: string; totalDebit: string; totalCredit: string }>> {
+  return withUser(userId, async (db) => {
+    const rows = await db`
+      select l.entry_id,
+             sum(l.debit)::numeric as total_debit,
+             sum(l.credit)::numeric as total_credit
+      from public.journal_lines l
+      join public.journal_entries e on e.id = l.entry_id
+      where e.organization_id = ${organizationId}
+      group by l.entry_id
+    `;
+    return rows.map((r) => ({
+      entryId: r.entry_id as string,
+      totalDebit: String(r.total_debit),
+      totalCredit: String(r.total_credit),
+    }));
+  });
+}
+
 export async function createJournalEntry(userId: string, input: CreateJournalEntryInput): Promise<JournalEntry> {
   return withUser(userId, async (db) => {
     const rows = await db`
